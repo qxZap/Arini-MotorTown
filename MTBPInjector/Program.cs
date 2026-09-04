@@ -661,8 +661,21 @@ internal static class Program
         newObj.Value = new FPackageIndex(newCellNum);
         newGridCells.Value = new PropertyData[] { newObj };
 
-        // LayerCellsMapping: key = (gridX + 524800) + gridY * 1024; value = LayerCells index
-        long key = (gridX + 524800L) + (long)gridY * 1024L;
+        // LayerCellsMapping key packing is PER GRID, not a constant.
+        //   MainGrid  cells 12800 -> 1024 wide -> key = (x+512) + (y+512)*1024
+        //   Landscape cells 51200 ->  256 wide -> key = (x+128) + (y+128)*256
+        // Both grids cover the same 13,107,200 uu world, so the lattice is
+        // world/cellSize cells across and the origin sits at half of that.
+        // Hardcoding MainGrid's 512/1024 put every cell registered into
+        // Landscape at a key outside its range, and the engine found none of
+        // them -- the island's foliage simply did not appear.
+        const long WORLD_EXTENT = 13_107_200L;
+        int gridCellSize = ((UAssetAPI.PropertyTypes.Objects.IntPropertyData)
+            sgrid.Value.First(p => p.Name.ToString() == "CellSize")).Value;
+        long levelCellSize = (long)gridCellSize << gridLevelsIndex;
+        long gridDim = WORLD_EXTENT / levelCellSize;
+        long half = gridDim / 2;
+        long key = (gridX + half) + (long)(gridY + half) * gridDim;
 
         // A GRID cell can hold MANY content cells -- GridCells is an array for
         // exactly that reason. Blindly adding a second mapping entry under the

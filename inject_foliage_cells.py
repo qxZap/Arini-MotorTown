@@ -526,7 +526,11 @@ def main() -> int:
         # 4 km, and it is what the terrain itself already streams on. Foliage
         # belongs there. hier_level 1 makes extent 25600, so the grid
         # coordinate maths lands on Landscape's 51200 lattice.
-        spec = cell_spec(name, cx, cy, gen_dir, hier_level=1)
+        # Landscape level 0: 51200 cells, so half-extent 25600 -- confirmed
+        # against the vanilla cells, which report ext=25600 there. The
+        # hierarchical level is 0, matching GridLevels[0]; it is the EXTENT
+        # that differs from MainGrid, not the level number.
+        spec = cell_spec(name, cx, cy, gen_dir, hier_level=0, extent=25600)
         spec["grid"] = "Landscape"
         spec["template-cell"] = FOLIAGE_TEMPLATE
         # Real content bounds over EVERY mesh in the tile. The IFAs span a

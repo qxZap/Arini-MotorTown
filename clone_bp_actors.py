@@ -515,7 +515,8 @@ def entry_seed(e: dict) -> str:
 
 
 def cell_spec(new_cell: str, x: float, y: float, mod_gen_dir: Path,
-              hier_level: int = -1, grid_levels_index: int = 0) -> dict:
+              hier_level: int = -1, grid_levels_index: int = 0,
+              extent: float | None = None) -> dict:
     """Spec for one cell registration. Consumed by register-cells-batch so N
     cells land in the main map via a single UAssetAPI load/save."""
     # DO NOT widen this to make cells stream earlier. `extent` feeds the grid
@@ -523,7 +524,11 @@ def cell_spec(new_cell: str, x: float, y: float, mod_gen_dir: Path,
     # same grid key -- 2500 foliage cells landed on a handful of keys and the
     # entire island's foliage stopped rendering. Content BOUNDS are the safe
     # lever for streaming distance (see MTMI_FOLIAGE_CELL_PAD); extent is not.
-    extent = 6400 * (2 ** (hier_level + 1))
+    # Default follows MainGrid's hierarchy. Another grid has its own cell
+    # size, so the caller states the half-cell-size outright rather than
+    # having it derived from a level number that means something else there.
+    if extent is None:
+        extent = 6400 * (2 ** (hier_level + 1))
     return {
         "template-cell":     TEMPLATE_CELL,
         "new-cell-name":     new_cell,
