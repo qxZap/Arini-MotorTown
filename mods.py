@@ -114,7 +114,9 @@ def main() -> int:
         # --mod-name prints the pak identity and --delta whether this layer
         # ships only patched data, so build.bat can ask for any of the three
         # without parsing.
-        if "--delta" in sys.argv:
+        if "--pak-prefix" in sys.argv:
+            print(layers[key].get("pak_prefix", "zzzz_"))
+        elif "--delta" in sys.argv:
             print("1" if layers[key].get("delta") else "0")
         elif "--mod-name" in sys.argv:
             print(layers[key].get("mod_name", ""))

@@ -35,7 +35,10 @@ from mt_paths import (GAME_PAKDIR, MAPPINGS, MOD_NAME, REPAK, REPO_ROOT, WORK_DI
                       MAP_WORK_JSON)
 
 MODNAME = MOD_NAME
-DEPLOYED_PAK = GAME_PAKDIR / f"zzzz_{MODNAME}.pak"
+# Prefix follows the layer: the MTNet variants ship as zzzzzz_ so they sort
+# past ZZZZMTNet_P. Hardcoding zzzz_ here would verify a pak that is not the
+# one just built -- or none at all.
+DEPLOYED_PAK = GAME_PAKDIR / f"{os.environ.get('MTMI_PAK_PREFIX', 'zzzz_')}{MODNAME}.pak"
 INJECTOR = REPO_ROOT / "MTBPInjector" / "bin" / "Release" / "net8.0" / "MTBPInjector.exe"
 DP_JSON = REPO_ROOT / "delivery_points.json"
 

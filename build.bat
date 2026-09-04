@@ -191,7 +191,8 @@ rem ----- staging folder, the deployed pak and every path below derive from.
 rem ----- Rename the folder to match and nothing else needs touching.
 if not defined MTMI_MOD_NAME set "MTMI_MOD_NAME=MapChangeTest_P"
 set "MODCONTENT=%MTMI_MOD_NAME%\MotorTown\Content"
-set "DEPLOYED=%MTMI_GAME_PAKDIR%\zzzz_%MTMI_MOD_NAME%.pak"
+if not defined MTMI_PAK_PREFIX set "MTMI_PAK_PREFIX=zzzz_"
+set "DEPLOYED=%MTMI_GAME_PAKDIR%\%MTMI_PAK_PREFIX%%MTMI_MOD_NAME%.pak"
 set "UMAP=%MODCONTENT%\Maps\Jeju\Jeju_World.umap"
 set "GENDIR=%MODCONTENT%\Maps\Jeju\Jeju_World\_Generated_"
 set "INJECTOR=MTBPInjector\bin\Release\net8.0\MTBPInjector.exe"
@@ -325,6 +326,10 @@ rem a layer name into the pak exclusions and the mod identity.
 if defined MTMI_LAYER (
     for /f "usebackq delims=" %%i in (`python mods.py --layer %MTMI_LAYER%`) do set "MTMI_EXCLUDE_PAKS=%%i"
     for /f "usebackq delims=" %%i in (`python mods.py --layer %MTMI_LAYER% --mod-name`) do set "MTMI_MOD_NAME=%%i"
+    rem The prefix follows the layer too: an MTNet variant has to sort past
+    rem ZZZZMTNet_P, which no zzzz_ name can. DEPLOYED below and every
+    rem "is this our own output" check read it from the environment.
+    for /f "usebackq delims=" %%i in (`python mods.py --layer %MTMI_LAYER% --pak-prefix`) do set "MTMI_PAK_PREFIX=%%i"
     if errorlevel 1 (
         echo   layer "%MTMI_LAYER%" could not be resolved -- see mods.json
         exit /b 1
@@ -337,7 +342,7 @@ if defined MTMI_LAYER (
     set "MODCONTENT=!MTMI_MOD_NAME!\MotorTown\Content"
     set "UMAP=!MODCONTENT!\Maps\Jeju\Jeju_World.umap"
     set "GENDIR=!MODCONTENT!\Maps\Jeju\Jeju_World\_Generated_"
-    set "DEPLOYED=%MTMI_GAME_PAKDIR%\zzzz_!MTMI_MOD_NAME!.pak"
+    set "DEPLOYED=%MTMI_GAME_PAKDIR%\!MTMI_PAK_PREFIX!!MTMI_MOD_NAME!.pak"
     echo   layer !MTMI_LAYER!: building !MTMI_MOD_NAME!, hiding !MTMI_EXCLUDE_PAKS!
 
     rem A compat layer patches DATA. It must not build the island: it mounts

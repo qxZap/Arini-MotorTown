@@ -326,7 +326,12 @@ MOD_CONTENT_ROOT: Path = MOD_ROOT / "MotorTown" / "Content"
 # Our deployed pak's filename (modp.bat prefixes the mod folder with
 # "zzzz_" so it wins load order). Never a source for effective_asset —
 # it IS our output.
-DEPLOY_PAK_NAME: str = f"zzzz_{MOD_NAME}.pak"
+# The prefix is per LAYER. MTNet mounts after every zzzz_ name, so a layer
+# that has to override its UserEngine.ini ships as zzzzzz_ instead. Anything
+# comparing against our own pak name has to use the same prefix or it stops
+# recognising our output and starts reading it back as a mod.
+DEPLOY_PAK_PREFIX: str = _cfg("MTMI_PAK_PREFIX", "zzzz_")
+DEPLOY_PAK_NAME: str = f"{DEPLOY_PAK_PREFIX}{MOD_NAME}.pak"
 
 
 def effective_pak_entries(entry: str) -> list[tuple[str, Path]]:

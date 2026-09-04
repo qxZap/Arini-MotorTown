@@ -10,7 +10,8 @@ rem including ZZZ_qxZap_..._A.pak and zzProxysOversizeCargo_A.pak.
 rem Empirically Cargos was being shadowed by zzProxys until our prefix
 rem sorted strictly later. UE 5.5 pak sort is case-insensitive ASCII
 rem ascending; "zzzz" beats "zzpr"/"zzqx" because at char 3 'z'>'p'/'q'.
-set "DEPLOY_NAME=zzzz_%MODNAME%"
+if defined MTMI_PAK_PREFIX (set "PFX=%MTMI_PAK_PREFIX%") else (set "PFX=zzzz_")
+set "DEPLOY_NAME=%PFX%%MODNAME%"
 set "DEPLOY_PAK=%DEPLOY_NAME%.pak"
 rem PAKDIR derived from MTMI_GAME_PAKDIR (preferred) or MT_GAME_DIR. Both
 rem normally come from .env via build.bat. When running modp.bat
