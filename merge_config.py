@@ -20,6 +20,7 @@ mods' settings survive; ours win only for the keys we actually set.
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -106,6 +107,18 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+
+    # MTMI_CONFIG_OFF=1 ships no UserEngine.ini whatsoever. Shipping none is
+    # not the same as shipping an empty one: our pak loads last, so a file we
+    # ship REPLACES every other mod's copy. No file means no override at all,
+    # and every other mod keeps its own settings untouched.
+    if os.environ.get("MTMI_CONFIG_OFF") == "1":
+        if OUT.exists():
+            OUT.unlink()
+            print(f"  UserEngine.ini: removed (MTMI_CONFIG_OFF=1) -- no override shipped")
+        else:
+            print(f"  UserEngine.ini: not shipped (MTMI_CONFIG_OFF=1)")
+        return 0
 
     merged: dict[str, dict[str, str]] = {}
     sources = effective_pak_entries(ENTRY)
