@@ -526,14 +526,26 @@ def main() -> int:
         # 4 km, and it is what the terrain itself already streams on. Foliage
         # belongs there. hier_level 1 makes extent 25600, so the grid
         # coordinate maths lands on Landscape's 51200 lattice.
-        # MainGrid level 0, one cell per grid square. Do not raise the level
-        # without solving what killed the attempt: above level 0 a grid square
-        # swallows many of our 25600 tiles -- 64 of them at level 4 -- so they
-        # share one square AND one RuntimeCellData name, and the game crashed
-        # on load. Level 0 is the only one-to-one mapping and the only
-        # arrangement that has ever loaded. Streaming distance comes from
-        # MTMI_WP_LOADING_RANGE instead, which needs no new code path.
-        spec = cell_spec(name, cx, cy, gen_dir)
+        # Landscape grid, level 0: 51200 cells, half-extent 25600, and a
+        # 409600 loading range that keeps every foliage cell resident for the
+        # whole session. Nothing streams, so nothing pops -- which is the only
+        # way to fix looking BACKWARD. World partition extends its streaming
+        # shape along your velocity, loading generously ahead and dropping
+        # aggressively behind, so a symmetric cull sits on top of a wildly
+        # asymmetric residency and the distance you experience behind you is a
+        # fraction of the number quoted.
+        #
+        # MainGrid's range cannot be raised to compensate: it is global, and at
+        # 76800 it pulled in vanilla Jeju's 3758 building cells and ran out of
+        # memory. Foliage needs its own streaming distance, which is exactly
+        # what a separate grid is.
+        #
+        # Do NOT raise the LEVEL to get the same effect. Above level 0 a grid
+        # square swallows many of our 25600 tiles -- 64 of them at level 4 --
+        # so they share one square and one RuntimeCellData name, and the game
+        # crashed on load.
+        spec = cell_spec(name, cx, cy, gen_dir, hier_level=0, extent=25600)
+        spec["grid"] = "Landscape"
         spec["template-cell"] = FOLIAGE_TEMPLATE
         # Real content bounds over EVERY mesh in the tile. The IFAs span a
         # 25600 tile but the runtime cell is 12800 wide, so the default
