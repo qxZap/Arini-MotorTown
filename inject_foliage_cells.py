@@ -526,16 +526,14 @@ def main() -> int:
         # 4 km, and it is what the terrain itself already streams on. Foliage
         # belongs there. hier_level 1 makes extent 25600, so the grid
         # coordinate maths lands on Landscape's 51200 lattice.
-        # MainGrid LEVEL 4: 204800 cells, half-extent 102400. With MainGrid's
-        # 25600 loading range that is a 1.28 km resident radius -- 6% of the
-        # island, against 100% on the Landscape grid, whose 4 km range loaded
-        # essentially everything at world load and cost half the frame rate.
-        #
-        # The level is the lever, not the grid. A bigger cell is reached from
-        # further away, so climbing MainGrid's own hierarchy buys streaming
-        # distance without touching Landscape's range, which vanilla terrain
-        # shares and must keep.
-        spec = cell_spec(name, cx, cy, gen_dir, hier_level=3, grid_levels_index=4)
+        # MainGrid level 0, one cell per grid square. Do not raise the level
+        # without solving what killed the attempt: above level 0 a grid square
+        # swallows many of our 25600 tiles -- 64 of them at level 4 -- so they
+        # share one square AND one RuntimeCellData name, and the game crashed
+        # on load. Level 0 is the only one-to-one mapping and the only
+        # arrangement that has ever loaded. Streaming distance comes from
+        # MTMI_WP_LOADING_RANGE instead, which needs no new code path.
+        spec = cell_spec(name, cx, cy, gen_dir)
         spec["template-cell"] = FOLIAGE_TEMPLATE
         # Real content bounds over EVERY mesh in the tile. The IFAs span a
         # 25600 tile but the runtime cell is 12800 wide, so the default
