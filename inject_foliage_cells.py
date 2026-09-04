@@ -520,7 +520,14 @@ def main() -> int:
     for tile, meshes in by_tile.items():
         name = make_cell_name(f"fol|{tile}")
         cx, cy = (tile[0] + 0.5) * GRID, (tile[1] + 0.5) * GRID
-        spec = cell_spec(name, cx, cy, gen_dir)
+        # The game ships two streaming grids. MainGrid is 12800 cells with a
+        # 25600 loading range -- 256 m, which is why foliage vanished the moment
+        # you crossed a border. Landscape is 51200 cells with a 409600 range:
+        # 4 km, and it is what the terrain itself already streams on. Foliage
+        # belongs there. hier_level 1 makes extent 25600, so the grid
+        # coordinate maths lands on Landscape's 51200 lattice.
+        spec = cell_spec(name, cx, cy, gen_dir, hier_level=1)
+        spec["grid"] = "Landscape"
         spec["template-cell"] = FOLIAGE_TEMPLATE
         # Real content bounds over EVERY mesh in the tile. The IFAs span a
         # 25600 tile but the runtime cell is 12800 wide, so the default

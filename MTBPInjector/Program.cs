@@ -661,18 +661,45 @@ internal static class Program
         newObj.Value = new FPackageIndex(newCellNum);
         newGridCells.Value = new PropertyData[] { newObj };
 
-        var newLayerCellsArr = new PropertyData[layerCells.Value.Length + 1];
-        Array.Copy(layerCells.Value, newLayerCellsArr, layerCells.Value.Length);
-        int newLayerCellIdxInArr = layerCells.Value.Length;
-        newLayerCellsArr[newLayerCellIdxInArr] = newLayerCell;
-        layerCells.Value = newLayerCellsArr;
-
-        // LayerCellsMapping: key = (gridX + 524800) + gridY * 1024; value = new LayerCells index
+        // LayerCellsMapping: key = (gridX + 524800) + gridY * 1024; value = LayerCells index
         long key = (gridX + 524800L) + (long)gridY * 1024L;
-        var keyProp = new UAssetAPI.PropertyTypes.Objects.Int64PropertyData(FName.FromString(asset, "LayerCellsMapping")) { Value = key };
-        var valProp = new UAssetAPI.PropertyTypes.Objects.IntPropertyData(FName.FromString(asset, "LayerCellsMapping")) { Value = newLayerCellIdxInArr };
-        mapping.Value.Add(keyProp, valProp);
-        Console.WriteLine($"  Registered cell in Grid '{gridName}' level[{gridLevelsIndex}] at grid=({gridX},{gridY}) key=0x{key:X16} layerIdx={newLayerCellIdxInArr}");
+
+        // A GRID cell can hold MANY content cells -- GridCells is an array for
+        // exactly that reason. Blindly adding a second mapping entry under the
+        // same key silently drops one of them, because the map keeps one value
+        // per key: register N cells into one grid square and N-1 never stream.
+        // That is what stopped the whole island's foliage rendering the last
+        // time a bigger cell size was tried, and it is what stands between us
+        // and putting foliage on a grid with a longer loading range.
+        UAssetAPI.PropertyTypes.Objects.IntPropertyData? existingIdx = null;
+        foreach (var kv in mapping.Value)
+            if (kv.Key is UAssetAPI.PropertyTypes.Objects.Int64PropertyData k64
+                && k64.Value == key
+                && kv.Value is UAssetAPI.PropertyTypes.Objects.IntPropertyData vi)
+            { existingIdx = vi; break; }
+
+        if (existingIdx != null && existingIdx.Value >= 0 && existingIdx.Value < layerCells.Value.Length)
+        {
+            var lc = (UAssetAPI.PropertyTypes.Structs.StructPropertyData)layerCells.Value[existingIdx.Value];
+            var gc = (ArrayPropertyData)lc.Value.First(p => p.Name.ToString() == "GridCells");
+            var grown = new PropertyData[gc.Value.Length + 1];
+            Array.Copy(gc.Value, grown, gc.Value.Length);
+            grown[gc.Value.Length] = newObj;
+            gc.Value = grown;
+            Console.WriteLine($"  Registered cell in Grid '{gridName}' level[{gridLevelsIndex}] at grid=({gridX},{gridY}) key=0x{key:X16} appended to layerIdx={existingIdx.Value} (now {grown.Length} cell(s))");
+        }
+        else
+        {
+            var newLayerCellsArr = new PropertyData[layerCells.Value.Length + 1];
+            Array.Copy(layerCells.Value, newLayerCellsArr, layerCells.Value.Length);
+            int newLayerCellIdxInArr = layerCells.Value.Length;
+            newLayerCellsArr[newLayerCellIdxInArr] = newLayerCell;
+            layerCells.Value = newLayerCellsArr;
+            var keyProp = new UAssetAPI.PropertyTypes.Objects.Int64PropertyData(FName.FromString(asset, "LayerCellsMapping")) { Value = key };
+            var valProp = new UAssetAPI.PropertyTypes.Objects.IntPropertyData(FName.FromString(asset, "LayerCellsMapping")) { Value = newLayerCellIdxInArr };
+            mapping.Value.Add(keyProp, valProp);
+            Console.WriteLine($"  Registered cell in Grid '{gridName}' level[{gridLevelsIndex}] at grid=({gridX},{gridY}) key=0x{key:X16} layerIdx={newLayerCellIdxInArr}");
+        }
 
         // Also copy template cell content .umap + .uexp to new name in mod dir,
         // then rewrite its internal FolderName so UE's package identity matches
