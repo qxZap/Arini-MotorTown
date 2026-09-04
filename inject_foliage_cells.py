@@ -526,12 +526,16 @@ def main() -> int:
         # 4 km, and it is what the terrain itself already streams on. Foliage
         # belongs there. hier_level 1 makes extent 25600, so the grid
         # coordinate maths lands on Landscape's 51200 lattice.
-        # Landscape level 0: 51200 cells, so half-extent 25600 -- confirmed
-        # against the vanilla cells, which report ext=25600 there. The
-        # hierarchical level is 0, matching GridLevels[0]; it is the EXTENT
-        # that differs from MainGrid, not the level number.
-        spec = cell_spec(name, cx, cy, gen_dir, hier_level=0, extent=25600)
-        spec["grid"] = "Landscape"
+        # MainGrid LEVEL 4: 204800 cells, half-extent 102400. With MainGrid's
+        # 25600 loading range that is a 1.28 km resident radius -- 6% of the
+        # island, against 100% on the Landscape grid, whose 4 km range loaded
+        # essentially everything at world load and cost half the frame rate.
+        #
+        # The level is the lever, not the grid. A bigger cell is reached from
+        # further away, so climbing MainGrid's own hierarchy buys streaming
+        # distance without touching Landscape's range, which vanilla terrain
+        # shares and must keep.
+        spec = cell_spec(name, cx, cy, gen_dir, hier_level=3, grid_levels_index=4)
         spec["template-cell"] = FOLIAGE_TEMPLATE
         # Real content bounds over EVERY mesh in the tile. The IFAs span a
         # 25600 tile but the runtime cell is 12800 wide, so the default
