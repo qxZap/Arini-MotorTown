@@ -79,6 +79,13 @@
         "qxZap_MoreTuning"
       ],
       "_": "Vehicle parts only. Listed so a layer can exclude it deliberately rather than by omission."
+    },
+    "mtnet": {
+      "label": "MTNet",
+      "match": [
+        "ZZZZMTNet"
+      ],
+      "_": "Ships two console variables and both are the host's own localhost URLs. Merging them would put one machine's server addresses in every player's pak, so no layer sees it."
     }
   },
   "layers": {
@@ -86,7 +93,8 @@
       "skip": [
         "capitalist",
         "proxy",
-        "moretuning"
+        "moretuning",
+        "mtnet"
       ],
       "mod_name": "Arini_P",
       "_": "The base release. Sees the stock game and nothing else.",
@@ -95,7 +103,8 @@
     "capitalist": {
       "skip": [
         "proxy",
-        "moretuning"
+        "moretuning",
+        "mtnet"
       ],
       "requires": [
         "capitalist"
@@ -107,7 +116,8 @@
     "proxy": {
       "skip": [
         "capitalist",
-        "moretuning"
+        "moretuning",
+        "mtnet"
       ],
       "requires": [
         "proxy"
@@ -118,7 +128,8 @@
     },
     "proxy_capitalist": {
       "skip": [
-        "moretuning"
+        "moretuning",
+        "mtnet"
       ],
       "requires": [
         "capitalist",

@@ -351,6 +351,14 @@ def effective_pak_entries(entry: str) -> list[tuple[str, Path]]:
     for pak in sorted(GAME_PAKDIR.glob("*.pak"), key=lambda p: p.name.lower()):
         if pak.name.lower() == DEPLOY_PAK_NAME.lower():
             continue          # our own output is never a source
+        # The layer decides what this build may SEE, and config is no
+        # different from a cargo table. Without this the base pak merged
+        # Capitalist Economy's 19 mh.* economy cvars into its own
+        # UserEngine.ini and shipped them to players who do not run that mod
+        # -- and merged our OTHER layers' inis too, since only the current
+        # layer's pak is skipped by name above.
+        if any(x in pak.name.lower() for x in _EXCLUDE_PAKS):
+            continue
         args = [str(REPAK)]
         if pak.name.lower() == "motortown-windows.pak":
             args += ["--aes-key", MT_AES_KEY]

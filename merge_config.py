@@ -33,12 +33,26 @@ OUT = MOD_ROOT / "MotorTown" / "Config" / "UserEngine.ini"
 # Keep this list to things the map genuinely cannot work without —
 # it is layered over every other mod's settings, so each entry here is a
 # value we take away from the user.
+def _places_fog_volumes() -> bool:
+    """Whether this build actually ships a LocalFogVolume."""
+    import json
+    p = Path("fog_placements.json")
+    if not p.is_file():
+        return False
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    return bool(d.get("placements") if isinstance(d, dict) else d)
+
+
 REQUIRED: dict[str, dict[str, str]] = {
-    "ConsoleVariables": {
-        # Local fog volumes are off by default in a cooked build; without
-        # this the actors load and draw nothing.
-        "r.SupportLocalFogVolumes": "1",
-    },
+    # Local fog volumes are off by default in a cooked build, so the actors
+    # would load and draw nothing -- but only ship the switch when there is
+    # something for it to switch on. Every key here is a value taken away
+    # from the player, and right now the island places zero fog volumes.
+    **({"ConsoleVariables": {"r.SupportLocalFogVolumes": "1"}}
+       if _places_fog_volumes() else {}),
     # [SystemSettings] is applied at SetBySystemSettingsIni priority, which
     # outranks SetByScalability. That matters here: the game's own
     # BaseScalability.ini turns the ENTIRE volumetric fog system off at the
