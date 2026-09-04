@@ -34,40 +34,39 @@ OUT = MOD_ROOT / "MotorTown" / "Config" / "UserEngine.ini"
 # Keep this list to things the map genuinely cannot work without —
 # it is layered over every other mod's settings, so each entry here is a
 # value we take away from the user.
-def _places_fog_volumes() -> bool:
-    """Whether this build actually ships a LocalFogVolume."""
+def _local_fog_volumes() -> int:
+    """How many LocalFogVolume actors this build actually ships.
+
+    The source is the SCENE EXPORT, not fog_placements.json. Those are two
+    different things and I checked the wrong one: fog_placements.json is a
+    hand-authored list that is empty and unused, while ue.py exports the real
+    ALocalFogVolume actors to static_meshes_parts/fog_volumes.json, and there
+    are eleven of them.
+    """
     import json
-    p = Path("fog_placements.json")
+    p = Path("static_meshes_parts") / "fog_volumes.json"
     if not p.is_file():
-        return False
+        return 0
     try:
         d = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
-        return False
-    return bool(d.get("placements") if isinstance(d, dict) else d)
+        return 0
+    v = d if isinstance(d, list) else (d.get("fog_volumes") or [])
+    return len(v)
 
 
 REQUIRED: dict[str, dict[str, str]] = {
-    # Local fog volumes are off by default in a cooked build, so the actors
-    # would load and draw nothing -- but only ship the switch when there is
-    # something for it to switch on. Every key here is a value taken away
-    # from the player, and right now the island places zero fog volumes.
+    # Local fog volumes are off by default in a cooked build: the actors load
+    # and draw nothing without this. Shipped only when the scene actually has
+    # some, because every key here is a value taken away from the player.
     **({"ConsoleVariables": {"r.SupportLocalFogVolumes": "1"}}
-       if _places_fog_volumes() else {}),
-    # [SystemSettings] is applied at SetBySystemSettingsIni priority, which
-    # outranks SetByScalability. That matters here: the game's own
-    # BaseScalability.ini turns the ENTIRE volumetric fog system off at the
-    # bottom two shadow-quality levels --
-    #     [ShadowQuality@0] r.VolumetricFog=0
-    #     [ShadowQuality@1] r.VolumetricFog=0
-    #     [ShadowQuality@2] r.VolumetricFog=1
-    # -- and it is SHADOW quality, not fog quality, that decides. A player on
-    # Low or Medium shadows gets no height-fog volumetrics and no Volume-domain
-    # materials at all, so the island's fog would silently depend on a setting
-    # that has nothing to do with fog. Pin it on instead.
-    "SystemSettings": {
-        "r.VolumetricFog": "1",
-    },
+       if _local_fog_volumes() else {}),
+    # r.VolumetricFog is NOT here. It governs the exponential height fog's
+    # volumetrics, and this build never touches the height fog -- ue.py
+    # exports height_fog.json but nothing applies it. What the island places
+    # is eleven LOCAL fog volumes, which are a separate UE 5.5 feature behind
+    # the switch above. Pinning a renderer feature we do not use would replace
+    # every other mod's UserEngine.ini for nothing.
 }
 
 
