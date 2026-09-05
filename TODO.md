@@ -1,12 +1,16 @@
 # TODO
 
 Working list. Each item records what is KNOWN (verified, with evidence) versus
-what is GUESSED, so nobody re-tests a settled fact. Current to the 2026-08-19
-in-game pass.
+what is GUESSED, so nobody re-tests a settled fact. Current to the 2026-09-05
+release build.
 
-Solved: 1 (delivery points), 2 (icons), 4 (fog), 6 (pumps and garages).
-Open: 3 (heights), 5 (foliage pop), 7 (fences), 8 (economy balance),
-9 (odds and ends).
+Solved: 1 (delivery points), 2 (icons), 4 (fog), 5 (foliage streaming),
+6 (pumps and garages), 8 (economy balance), 11 (snow), 12 (compat layers).
+Open: 3 (heights), 7 (fences), 9 (odds and ends), 13 (memory).
+
+**Shipping as of 2026-09-05:** four zips in `Downloads/Arini` -- the island
+plus three compatibility patches, two of which carry an MTNet variant. Six
+paks in total, built by `build.bat --layer <name>` from `mods.json`.
 
 ---
 
@@ -215,39 +219,70 @@ it settled in minutes what guessing could not.
 
 ---
 
-## 5. FOLIAGE POP
+## 5. FOLIAGE STREAMING — SOLVED 5 Sep
 
-**Known**
-- Improved by padding each foliage cell's reported content bounds outward, so
-  streaming pulls the cell in before you reach it. Confirmed better in game.
-- Cull is 30,000 to 70,000 with cells unloading at 76,800 — 6,800 uu of margin.
-- Grass is 29% of 3.45M instances.
+Four separate faults wearing one symptom. Recorded in the order they had to be
+peeled off, because each one hid the next.
 
-**Done**
-- `MTMI_FOLIAGE_CELL_PAD` 25600 confirmed better in game.
-- Raised to 51200, then ROLLED BACK to 25600 after a game crash. Padding is
-  the only recent change that increases runtime memory: every cell claims
-  bounds that much larger, so many more stay resident at once with 3.4M
-  instances behind them. Unproven as the cause -- Motor Town ships with
-  logging off, so there was no crash log to read.
+**1. Cell padding was not the streaming lever.** `MTMI_FOLIAGE_CELL_PAD`
+writes `ContentBounds`, which governs how content is culled WITHIN a cell --
+real, and it is why overhang at cell edges stopped disappearing. It does NOT
+decide when a cell streams in. Five rounds of raising it (12800 to 600000)
+bought far less than reported at the time.
 
-- 25600 LEAKED TOO. Padding is off (`MTMI_FOLIAGE_CELL_PAD=0`). Before padding
-  existed the build ran for days without leaking, so zero is the real
-  baseline and the 25600 rollback was not the known-good I called it.
-- RE-ENABLED 19 Aug, now that the actor work has landed. A full build is
-  ~13 min and 1022 MB against ~6 min and 537 MB with `--skip-foliage`. Use the
-  flag while iterating on anything that is not foliage; ship with it on.
-- 9,192 rock instances are promoted to persistent actors
-  (`MTMI_FOLIAGE_AS_ACTORS=Rock`) so a solid rock never streams in on top of a
-  moving vehicle.
+**2. Foliage was on the wrong grid.** The map ships TWO streaming grids:
 
-**Next**
-- Re-test padding only after the actor work, and only from 0 upward.
-- If more reach is wanted, prefer raising the CULL distance over the pad:
-  culling costs draw calls, residency costs memory, and memory is what
-  crashes.
-- Launch the game via Steam with `-log` in the launch options so the next
-  crash leaves something readable.
+    MainGrid    CellSize 12800   LoadingRange  25600   (256 m)
+    Landscape   CellSize 51200   LoadingRange 409600   (4 km)
+
+Foliage registered into MainGrid, so it streamed on a 256 m radius -- cross a
+cell border and what was behind you unloaded. It is on Landscape now, which is
+what the terrain itself uses, so nothing streams and nothing pops.
+
+**3. The mapping key is packed PER GRID.** Decoded from the vanilla map:
+
+    MainGrid   grid=(-59,116) -> 643525  = (x+512) + (y+512)*1024
+    Landscape  grid=(1,13)    ->  36225  = (x+128) + (y+128)*256
+
+Both grids span the same 13,107,200 uu world, so the lattice is world/cellSize
+across and the origin is half of it. Reusing MainGrid's constants put every
+cell at a key outside Landscape's range and the island lost its foliage
+entirely. `decode-layer-keys` answers this in seconds -- use it BEFORE moving
+cells between grids, not after.
+
+**4. A grid cell holds MANY content cells.** `GridCells` is an array for
+exactly that reason, but registration always added a fresh `LayerCell` plus a
+fresh mapping entry, and a map keeps one value per key. On any lattice coarser
+than our 25600 tiles the surplus cells silently never streamed. Fixed by
+appending to the existing `LayerCell`. This also recovered 420 foliage cells
+that had been colliding with vanilla cells on MainGrid and being dropped on
+EVERY build ever made -- a plausible source of the long-standing "bare
+patches".
+
+**Nanite was swallowing the cull.** Nanite does its own screen-size culling and
+does not honour `InstanceStartCullDistance` / `InstanceEndCullDistance`
+reliably on foliage components -- it behaves differently on a mesh actor than
+on an instanced foliage component. Every cull value set before 5 Sep was
+decorative, which is why 400 m looked sparse, 3.9 km crushed the frame rate,
+and turning culling off changed less than it should have. Foliage is cooked
+WITHOUT Nanite now; rocks keep it.
+
+**Do not raise the grid LEVEL to gain distance.** Above level 0 a grid square
+swallows many of our 25600 tiles -- 64 of them at level 4 -- so they share one
+square and one `RuntimeCellData` name. It crashed on world load.
+
+**Settings that ship**
+
+    MTMI_FOLIAGE_CULL_START=17500   fade begins at 175 m
+    MTMI_FOLIAGE_CULL_END=25000     gone by 250 m
+    MTMI_FOLIAGE_CULL_OVERRIDES=    one rule for everything
+    MTMI_FOLIAGE_CELL_PAD=25600     ContentBounds only, not streaming
+    MTMI_FOLIAGE_AS_ACTORS=rock     9,191 rocks never stream
+
+Per-type culls were dropped: they existed to make grass cheaper than trees and
+they are also what made bushes vanish 900 m before trees did.
+
+**Open — memory.** See section 13.
 
 ---
 
@@ -504,6 +539,75 @@ and every other mod touching that material would fight ours. Same reasoning as
 the tanker mod: the standalone copy is the testable one.
 
 Not started. Worth doing after the bus stops land.
+
+## 12. COMPATIBILITY LAYERS — SOLVED 4-5 Sep
+
+Six paks from one source tree. `mods.json` names which other mods each layer
+may SEE; `build.bat --layer <name>` builds it.
+
+    zzzz_Arini_P.pak                       the island
+    zzzz_Arini_zCapEcon_P.pak              + Capitalist Economy
+    zzzz_Arini_zProxy_P.pak                + Proxy's Oversized Cargo
+    zzzz_Arini_zProxyCapEcon_P.pak         + both
+    zzzzz_Arini_CapEconMTNet_P.pak         + CapEcon, MTNet-safe
+    zzzzz_Arini_ProxyCapEconMTNet_P.pak    + both, MTNet-safe
+
+**A layer is a DELTA.** Cargo tables and the `Mod*` delivery-point classes,
+nothing else. It mounts after the base, so any map file it carried would
+override the island -- and one built with foliage skipped erased the base
+build's foliage. `prune_delta.py` strips it before packing and `verify_build`
+fails a delta that ships any `.umap`. This took the layers from 889 MB to
+0.65.
+
+**The delta lands because the class name is `sha1(delivery point key)`,**
+identical in every layer, so the base map's actors already point at the class
+the layer overrides. Nothing else needs to travel.
+
+**Recipes live in the class CDO and nowhere else.** They used to be written
+as a per-instance override on the map actor too. A serialized instance
+property beats the CDO, the instance lives in the map, and a delta ships no
+map -- so the layer's correct CDO lost to the base map's copy, silently.
+
+**Naming is load-bearing.** `zzzz_Arini_CapEcon_P` would sort BEFORE
+`zzzz_Arini_P` ('c' < 'p' at char 11) and lose to the base it extends -- hence
+the `z` infix. The MTNet variants need FIVE z's because `ZZZZMTNet_P` mounts
+after every four-z name ('_' < 'm' at char 4). Verify order before renaming.
+
+**Config is layered too.** `effective_pak_entries` honours
+`MTMI_EXCLUDE_PAKS`, so the base no longer merges Capitalist Economy's 17
+economy cvars or MTNet's two localhost endpoints into a pak shipped to players
+who run neither. It ships one setting: `r.SupportLocalFogVolumes`, and only
+because the island places 11 `LocalFogVolume` actors.
+
+**An ini-only variant is not a build.** `mtnet_variant.py` copies the twin's
+staged tree, rewrites the one file that differs and repacks -- seconds instead
+of twelve minutes. A compat that changes no cargo should not rebuild cargo.
+
+---
+
+## 13. MEMORY AT 10 GB — OPEN
+
+**Known**
+- Dense foliage areas hold frame rate but sit around 10 GB of RAM.
+- Every foliage cell is resident for the whole session (Landscape grid,
+  409600 range). That is what removes the popping and what costs the memory.
+- Nanite helped RAM and load times and destroyed the culling. Not a trade
+  that can be taken back without losing distance control.
+- Radius halved to 250 m on 5 Sep: area scales with r-squared, so a half
+  radius is 75% fewer instances drawn. Drawn is frame rate; RESIDENT is
+  memory, and the radius does not change residency.
+
+**Next, in order of expected value**
+- Residency is the memory lever, not the cull. Moving foliage back to MainGrid
+  streams it again and cuts resident cells hard, at the cost of the border
+  unloading that Landscape fixed. Measure before choosing.
+- LODs are now real again post-Nanite. Check whether the tree meshes carry a
+  full chain; 8,015 fallback triangles with no reduction is a lot at any
+  distance.
+- `SM_Grass_Clump_03` alone is 29% of 3.47M instances. Thinning it in the
+  editor costs nothing at runtime.
+
+---
 
 ## 10. HOW THIS PROJECT GOES WRONG
 

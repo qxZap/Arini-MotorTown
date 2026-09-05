@@ -118,6 +118,55 @@ Selective stage flags: `--skip-meshes`, `--only-actors`, etc. Run
 
 ---
 
+## Build layers and compatibility patches
+
+One source tree, six paks. `mods.json` names which other mods each layer is
+allowed to SEE, because `mt_paths` resolves every vanilla asset through the
+installed paks -- so a mod that overrides `Cargos_01` silently becomes the
+baseline. Building the plain release on a machine with Capitalist Economy
+installed would price the island against ITS table and ship that to players
+who do not have it.
+
+    python mods.py                        what is installed, which layers can build
+    build.bat --layer vanilla             the island
+    build.bat --layer capitalist          + Capitalist Economy
+    build.bat --layer proxy               + Proxy's Oversized Cargo
+    build.bat --layer proxy_capitalist    + both
+
+| pak | contents |
+|---|---|
+| `zzzz_Arini_P.pak` | the island: map, meshes, foliage, cargo |
+| `zzzz_Arini_zCapEcon_P.pak` | cargo tables + `Mod*` classes only |
+| `zzzz_Arini_zProxy_P.pak` | same |
+| `zzzz_Arini_zProxyCapEcon_P.pak` | same |
+| `zzzzz_Arini_CapEconMTNet_P.pak` | same, plus MTNet's config preserved |
+| `zzzzz_Arini_ProxyCapEconMTNet_P.pak` | same |
+
+**A compat layer is a delta.** It mounts after the base, so anything it ships
+wins -- which is right for cargo tables and a disaster for a map. `prune_delta.py`
+strips it to the data files before packing, and `verify_build.py` fails a delta
+that carries any `.umap`. The delta lands because the generated class name is
+`sha1(delivery point key)`, identical in every layer, so the base map's actors
+already point at the class the layer overrides.
+
+**Filename order is the whole mechanism.** Unreal mounts paks in filename
+order and the last wins. `zzzz_Arini_CapEcon_P` would sort BEFORE
+`zzzz_Arini_P` -- `c` precedes `p` at character 11 -- and lose to the base it
+extends, hence the `z` infix. The MTNet variants carry five z's because
+`ZZZZMTNet_P` mounts after every four-z name. Check the order before renaming
+anything: a wrongly named pak still loads, still errors at nothing, and
+silently does nothing.
+
+**Releases:** `python make_release.py` writes four zips to `Downloads/Arini`,
+one per audience, each with an install README. Variants that differ only by
+config ship as folders inside one zip rather than separate downloads.
+
+**An ini-only variant is not a build.** `mtnet_variant.py <base> <mtnet>`
+copies the twin's staged tree, rewrites the one file that differs and repacks
+-- seconds, not twelve minutes.
+
+---
+
 ## Build times (rough ETAs)
 
 Measured on an NVMe SSD, mid-range desktop. Yours will vary, but the
