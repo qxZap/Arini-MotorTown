@@ -31,7 +31,18 @@ Measured in game (this machine, many other mods loaded alongside):
 |---------|------|-------|----------------|
 | default | 3 s  | 5 GB  | --             |
 | high    | 5 s  | 6 GB  | -5%            |
-| extreme | ?    | ?     | ?              |
+| extreme | ~    | ~     | worse          |
+
+## Verdict: ship `default`
+
+Tested in game. HIGH costs 2 s of load, 1 GB of RAM and 5% of frame rate to
+draw foliage from 250 m to 500 m; EXTREME costs more again. Neither is worth
+it in play -- the extra draw distance is not somewhere you look.
+
+So the tiers are NOT shipped. They stay documented because the measurement
+is the useful part: it says the island is not GPU-bound on foliage, and that
+LoadingRange is the only knob that ever mattered. If more detail lands on the
+map later and something needs to give, the numbers to reason with are here.
 
 `extreme` is vanilla's own Landscape range, so it is the configuration the
 island shipped with before any of this work -- but with the collision and
