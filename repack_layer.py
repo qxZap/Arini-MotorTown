@@ -37,6 +37,16 @@ def main() -> int:
         if not stage.is_dir():
             print(f"  {layer}: {stage} not staged -- needs a real build"); rc = 1; continue
         print(f"  === {layer} -> {e['MTMI_PAK_PREFIX']}{e['MTMI_MOD_NAME']}.pak ===")
+        # Re-cooking a mesh changes only that ASSET. The cells reference it by
+        # path and the instance transforms are untouched, so there is nothing
+        # to rebuild -- take the new copy and repack. Delta layers stage no
+        # meshes, so this is a no-op for them.
+        content = stage / "MotorTown" / "Content"
+        if content.is_dir():
+            r = subprocess.run([sys.executable, "sync_cooked.py", str(content)],
+                               env=e, capture_output=True, text=True)
+            for l in r.stdout.splitlines():
+                if l.strip(): print("    " + l.strip())
         for step in (["merge_config.py"], ):
             r = subprocess.run([sys.executable] + step, env=e, capture_output=True, text=True)
             tail = [l for l in r.stdout.splitlines() if l.strip()]
