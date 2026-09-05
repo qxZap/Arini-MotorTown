@@ -90,11 +90,10 @@ def main() -> int:
             print(f"    ----  {layer}: not deployed")
 
     if stale:
-        print(f"
-  {len(stale)} compat pak(s) older than the base. Their Mod* "
-              f"classes were generated against an earlier map and they mount "
-              f"last, so they win. NOT known to be fatal on its own -- clear "
-              f"it before blaming anything subtler.", file=sys.stderr)
+        print(f"\n  {len(stale)} compat pak(s) older than the base. Their Mod* "
+              f"classes were generated against an earlier map, and they mount "
+              f"last so they win. NOT known to be fatal on its own -- clear it "
+              f"before blaming anything subtler.", file=sys.stderr)
         print(f"  Rebuild them: build.bat --layer "
               + " / --layer ".join(l for l, _, _ in stale), file=sys.stderr)
         return 0
