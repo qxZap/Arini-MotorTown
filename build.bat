@@ -523,6 +523,16 @@ if not "%MTMI_SKIP_CONFIG%"=="1" (
     if errorlevel 1 exit /b 1
 ) else ( echo [%TIME%] [5c] skipped ^(MTMI_SKIP_CONFIG=1^) )
 
+rem copy_asset_to_mod only refreshes assets a MESH references. Anything staged
+rem by another route -- the in-game world map above all -- was copied once and
+rem never looked at again, so re-cooking it changed nothing. This takes the
+rem cooked copy of anything already staged whose CONTENT differs.
+if not "%MTMI_DELTA%"=="1" (
+    echo [%TIME%] [5e0] Refreshing staged assets from cooked output...
+    python sync_cooked.py "%MODCONTENT%"
+    if errorlevel 1 exit /b 1
+)
+
 rem The clean step wipes three folders and nothing else, so an asset painted
 rem into the scene once and removed later keeps shipping forever -- the pak only
 rem ever grows. This walks the package references out of the maps and data

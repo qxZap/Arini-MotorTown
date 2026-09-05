@@ -59,8 +59,25 @@ REQUIRED: dict[str, dict[str, str]] = {
     # Local fog volumes are off by default in a cooked build: the actors load
     # and draw nothing without this. Shipped only when the scene actually has
     # some, because every key here is a value taken away from the player.
-    **({"ConsoleVariables": {"r.SupportLocalFogVolumes": "1"}}
-       if _local_fog_volumes() else {}),
+    "ConsoleVariables": {
+        # Nanite's candidate and visible cluster buffers are FIXED SIZE. Epic:
+        # "There is no mechanism for dynamically resizing either of these
+        # buffers, or automatically scaling down quality on overflow, which can
+        # result in rendering artifacts ... typically manifesting as missing or
+        # blinking geometry." That is the reported "blind areas with no foliage".
+        # This island runs ~3.5M foliage instances, well past what the defaults
+        # were sized for.
+        #
+        # Cost is stated by Epic as 12 bytes per candidate cluster and 16 per
+        # visible cluster, so these values cost about 384 MB and 64 MB of GPU
+        # memory respectively. If that proves too much, halve MaxCandidateClusters
+        # first -- it is the larger of the two by a wide margin.
+        "r.Nanite.MaxCandidateClusters": "33554432",
+        "r.Nanite.MaxVisibleClusters":   "4194304",
+        # Local fog volumes are off by default in a cooked build: the actors load
+        # and draw nothing without this. Only shipped when the scene has some.
+        **({"r.SupportLocalFogVolumes": "1"} if _local_fog_volumes() else {}),
+    },
     # r.VolumetricFog is NOT here. It governs the exponential height fog's
     # volumetrics, and this build never touches the height fog -- ue.py
     # exports height_fog.json but nothing applies it. What the island places
