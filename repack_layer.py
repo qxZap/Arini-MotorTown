@@ -47,6 +47,10 @@ def main() -> int:
                                env=e, capture_output=True, text=True)
             for l in r.stdout.splitlines():
                 if l.strip(): print("    " + l.strip())
+            r = subprocess.run([sys.executable, "worldmap_align.py", str(content)],
+                               env=e, capture_output=True, text=True)
+            for l in r.stdout.splitlines():
+                if l.strip(): print("    " + l.strip())
         for step in (["merge_config.py"], ):
             r = subprocess.run([sys.executable] + step, env=e, capture_output=True, text=True)
             tail = [l for l in r.stdout.splitlines() if l.strip()]

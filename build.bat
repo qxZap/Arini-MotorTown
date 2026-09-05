@@ -533,6 +533,16 @@ if not "%MTMI_DELTA%"=="1" (
     if errorlevel 1 exit /b 1
 )
 
+rem The in-game map is a texture AND the world rectangle the game thinks it
+rem covers. Ship one without the other and the island sits right while every
+rem road and marker sits slightly wrong -- silently. worldmap.py records the
+rem rectangle; this applies it.
+if not "%MTMI_DELTA%"=="1" (
+    echo [%TIME%] [5e1] Aligning world map bounds to the shipped image...
+    python worldmap_align.py "%MODCONTENT%"
+    if errorlevel 1 exit /b 1
+)
+
 rem The clean step wipes three folders and nothing else, so an asset painted
 rem into the scene once and removed later keeps shipping forever -- the pak only
 rem ever grows. This walks the package references out of the maps and data
