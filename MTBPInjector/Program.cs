@@ -63,6 +63,7 @@ internal static class Program
                 "dump-cargo-weights" => DumpCargoWeights(args.Skip(1).ToArray()),
                 "dump-table" => DumpTable(args.Skip(1).ToArray()),
                 "set-worldmap" => SetWorldMap(args.Skip(1).ToArray()),
+                "set-loading-range" => SetLoadingRangeCmd(args.Skip(1).ToArray()),
                 "clone-vehicle-row" => CloneVehicleRow(args.Skip(1).ToArray()),
                 "vehicle-awd" => VehicleAllWheelDrive(args.Skip(1).ToArray()),
                 "vehicle-fuel-pump" => VehicleFuelPump(args.Skip(1).ToArray()),
@@ -3283,6 +3284,29 @@ internal static class Program
             return;
         }
         Console.WriteLine($"  loading-range: grid '{gridName}' not found");
+    }
+
+    // Patch one grid's LoadingRange on an ALREADY BUILT map, so changing it
+    // costs a repack instead of a 12-minute rebuild.
+    //
+    // Foliage cells live on the Landscape grid (inject_foliage_cells.py sets
+    // grid="Landscape"), whose range is 409600 -- chosen so nothing ever pops.
+    // The bill for that: ~996k instances and ~519k physics bodies resident at
+    // ALL times, 29% of the island. It is the whole RAM and teleport-time
+    // cost. MTMI_WP_LOADING_RANGE never reached it -- that only ever wrote
+    // MainGrid.
+    private static int SetLoadingRangeCmd(string[] args)
+    {
+        var f = ParseFlags(args);
+        var path = f["umap"];
+        var asset = new UAsset(path, EngineVer, LoadMappings(f["mappings"]));
+        if (!f.TryGetValue("range", out var rs) ||
+            !float.TryParse(rs, System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture, out var range))
+        { Console.Error.WriteLine("  set-loading-range: --range is required"); return 1; }
+        SetGridLoadingRange(asset, f.GetValueOrDefault("grid", "MainGrid"), range);
+        asset.Write(path);
+        return 0;
     }
 
     private static int RegisterAndClone(string[] args)

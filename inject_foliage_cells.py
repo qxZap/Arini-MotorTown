@@ -64,6 +64,11 @@ SOLID_PROFILE = "BlockAll"
 # are resident before they enter view. 0 disables. Set MTMI_FOLIAGE_CELL_PAD.
 CELL_PAD = float(os.environ.get("MTMI_FOLIAGE_CELL_PAD", "25600"))
 
+# What the Landscape grid ships with when MTMI_LANDSCAPE_LOADING_RANGE is
+# unset. Foliage cells live on that grid, so this -- not MainGrid's 25600 --
+# is the distance a cell stays resident to.
+LANDSCAPE_RANGE_VANILLA = 409600.0
+
 # asset_path -> collision profile, read from the cooked mesh at build time.
 # Authoritative over foliage_settings.json: that file is an editor snapshot
 # and goes stale the moment a mesh is re-cooked without re-exporting.
@@ -412,11 +417,18 @@ def main() -> int:
         ap = mesh_paths[key]
         folders[ap.rsplit("/", 1)[0] if "/" in ap else "?"] += 1
     # INVARIANT: instances must stop drawing BEFORE their cell unloads.
-    # WP unloads a cell past MTMI_WP_LOADING_RANGE; if foliage is still
-    # drawing at that distance it vanishes in one hard pop, and looking back
-    # at a cell you just left shows bare ground. Cull end below the loading
-    # range makes the fade happen while the cell is still resident.
-    _lr = os.environ.get("MTMI_WP_LOADING_RANGE", "").strip()
+    # If foliage is still drawing when its cell goes, it vanishes in one hard
+    # pop, and looking back at a cell you just left shows bare ground. Cull
+    # end below the loading range makes the fade happen while resident.
+    #
+    # The range that matters is the LANDSCAPE grid's, because that is where
+    # these cells are registered (see spec["grid"] below).
+    # MTMI_WP_LOADING_RANGE is MainGrid's and has never applied to foliage --
+    # checking against it reported on a build nobody was making, and hid the
+    # fact that foliage was resident to 4 km (996k instances, 519k physics
+    # bodies, 29% of the island, at all times).
+    _lr = (os.environ.get("MTMI_LANDSCAPE_LOADING_RANGE", "").strip()
+           or str(LANDSCAPE_RANGE_VANILLA))
     if _lr:
         try:
             # A cell claims bounds CELL_PAD larger than its contents, so it
@@ -428,13 +440,13 @@ def main() -> int:
             if worst == 0:
                 print(f"  foliage never culls (cull end 0) — draws to the horizon "
                       f"and pops out when its cell unloads at {lr:,.0f}. Raise "
-                      f"MTMI_WP_LOADING_RANGE to push the pop further out, or set "
+                      f"MTMI_LANDSCAPE_LOADING_RANGE to push the pop further out, or set "
                       f"MTMI_FOLIAGE_CULL_END to fade instead.")
             elif worst >= lr:
                 print(f"  WARNING: cull end {worst:,.0f} >= loading range {lr:,.0f}. "
                       f"Foliage still draws when its cell unloads, so it will pop "
                       f"out instead of fading. Lower the cull or raise "
-                      f"MTMI_WP_LOADING_RANGE.", file=sys.stderr)
+                      f"MTMI_LANDSCAPE_LOADING_RANGE.", file=sys.stderr)
             else:
                 # Headroom in SECONDS, because uu does not say whether it is
                 # enough. It is the whole window a cell has to come off the pak
@@ -451,7 +463,7 @@ def main() -> int:
                     print(f"  WARNING: {secs:.1f}s is not long enough to stream "
                           f"a cell in. Foliage will appear already grown rather "
                           f"than fading up. Lower MTMI_FOLIAGE_CULL_END or the "
-                          f"per-mesh overrides, or raise MTMI_WP_LOADING_RANGE.",
+                          f"per-mesh overrides, or raise MTMI_LANDSCAPE_LOADING_RANGE.",
                           file=sys.stderr)
         except ValueError:
             pass

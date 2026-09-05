@@ -25,7 +25,7 @@ import re
 import sys
 from pathlib import Path
 
-from mt_paths import MOD_ROOT, effective_pak_entries
+from mt_paths import MOD_ROOT, effective_pak_entries, _cfg
 
 ENTRY = "MotorTown/Config/UserEngine.ini"
 OUT = MOD_ROOT / "MotorTown" / "Config" / "UserEngine.ini"
@@ -55,6 +55,38 @@ def _local_fog_volumes() -> int:
     return len(v)
 
 
+def _foliage_cull_scale() -> str:
+    """MTMI_FOLIAGE_CULL_SCALE as a cvar value, or "" to ship nothing.
+
+    Two different knobs control how much foliage you see, and they bill to
+    different budgets:
+
+        Landscape grid LoadingRange  -> how many cells stay RESIDENT  -> RAM
+        instance cull distance       -> how many instances DRAW       -> GPU
+
+    Cull distance is baked into every component in every cell, so changing it
+    normally costs a full rebuild. foliage.CullDistanceScale multiplies it at
+    runtime instead, which is what makes a quality tier an ini change.
+
+    It must never push the draw distance past the loading range: instances
+    still drawing when their cell unloads pop out instead of fading.
+    inject_foliage_cells.py checks the baked numbers; this scales them AFTER
+    that check, so the headroom has to be left by hand.
+    """
+    # _cfg, not os.environ: a standalone repack must honour .env the same
+    # way build.bat does, or the tier silently does not ship.
+    v = (_cfg("MTMI_FOLIAGE_CULL_SCALE", "") or "").strip()
+    if not v:
+        return ""
+    try:
+        f = float(v)
+    except ValueError:
+        print(f"  MTMI_FOLIAGE_CULL_SCALE={v!r} is not a number -- ignored",
+              file=sys.stderr)
+        return ""
+    return "" if f == 1.0 else f"{f:g}"
+
+
 REQUIRED: dict[str, dict[str, str]] = {
     # Local fog volumes are off by default in a cooked build: the actors load
     # and draw nothing without this. Shipped only when the scene actually has
@@ -77,6 +109,12 @@ REQUIRED: dict[str, dict[str, str]] = {
         # Local fog volumes are off by default in a cooked build: the actors load
         # and draw nothing without this. Only shipped when the scene has some.
         **({"r.SupportLocalFogVolumes": "1"} if _local_fog_volumes() else {}),
+        # Quality tier: multiplies the baked per-instance cull distance so
+        # "see twice as far" is an ini change, not a 12-minute rebuild.
+        # Absent (or 1) ships nothing -- every key here is a value taken away
+        # from the player.
+        **({"foliage.CullDistanceScale": _foliage_cull_scale()}
+           if _foliage_cull_scale() else {}),
     },
     # r.VolumetricFog is NOT here. It governs the exponential height fog's
     # volumetrics, and this build never touches the height fog -- ue.py

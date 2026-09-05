@@ -543,6 +543,16 @@ if not "%MTMI_DELTA%"=="1" (
     if errorlevel 1 exit /b 1
 )
 
+rem Foliage cells sit on the LANDSCAPE grid, whose 409600 range keeps ~996k
+rem instances and ~519k physics bodies resident at ALL times (29% of the
+rem island). MTMI_WP_LOADING_RANGE never reached it -- that only wrote
+rem MainGrid. No-op unless MTMI_LANDSCAPE_LOADING_RANGE is set.
+if not "%MTMI_DELTA%"=="1" (
+    echo [%TIME%] [5e2] Applying Landscape grid loading range...
+    python grid_range.py "%MODCONTENT%"
+    if errorlevel 1 exit /b 1
+)
+
 rem The clean step wipes three folders and nothing else, so an asset painted
 rem into the scene once and removed later keeps shipping forever -- the pak only
 rem ever grows. This walks the package references out of the maps and data
