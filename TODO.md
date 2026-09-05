@@ -585,27 +585,60 @@ of twelve minutes. A compat that changes no cargo should not rebuild cargo.
 
 ---
 
-## 13. MEMORY AT 10 GB — OPEN
+## 13. MEMORY AT 10 GB — SOLVED 5 Sep
 
-**Known**
-- Dense foliage areas hold frame rate but sit around 10 GB of RAM.
-- Every foliage cell is resident for the whole session (Landscape grid,
-  409600 range). That is what removes the popping and what costs the memory.
-- Nanite helped RAM and load times and destroyed the culling. Not a trade
-  that can be taken back without losing distance control.
-- Radius halved to 250 m on 5 Sep: area scales with r-squared, so a half
-  radius is 75% fewer instances drawn. Drawn is frame rate; RESIDENT is
-  memory, and the radius does not change residency.
+12 GB and a 20 s teleport, down to **5 GB and 3 s**. The section's own last
+guess was right: *residency is the memory lever, not the cull*.
 
-**Next, in order of expected value**
-- Residency is the memory lever, not the cull. Moving foliage back to MainGrid
-  streams it again and cuts resident cells hard, at the cost of the border
-  unloading that Landscape fixed. Measure before choosing.
-- LODs are now real again post-Nanite. Check whether the tree meshes carry a
-  full chain; 8,015 fallback triangles with no reduction is a lot at any
-  distance.
-- `SM_Grass_Clump_03` alone is 29% of 3.47M instances. Thinning it in the
-  editor costs nothing at runtime.
+**What it was**
+Foliage cells are registered on the **Landscape** streaming grid, whose
+LoadingRange is 409600 — chosen deliberately so a cell never unloads while
+you can still see it, which is the only thing that fixes looking BACKWARD.
+Nobody had counted what that costs:
+
+| loading range | resident instances | physics bodies |
+|---------------|-------------------:|---------------:|
+| 409600 (4 km) |            996,583 |        519,277 |
+| 204800 (2 km) |            315,541 |        182,335 |
+| 102400 (1 km) |             96,723 |         51,180 |
+
+29% of the island, permanently, all session. At 102400 it is 3%.
+
+**Why it stayed hidden**
+`MTMI_WP_LOADING_RANGE` only ever wrote **MainGrid** — and the one guard that
+existed, the cull-vs-unload invariant in `inject_foliage_cells.py`, checked
+against that same wrong number. It reported confidently on a build nobody was
+making. Both now read the Landscape grid, and `grid_range.py` sets it.
+
+**Collision, measured on the way**
+Simplifying tree collision from 7.4M primitives to 2.5M bought 12 GB -> 9 GB
+and 20 s -> 15 s. Real, but it only made each of the half-million bodies
+cheaper; the COUNT never moved. It was not the answer, and chasing it first
+cost a day. `SM_Tree_06` alone carried 8 primitives across 283k instances.
+
+**Nanite: off, everywhere**
+Not a hard trade after all. Nanite cannot fade (`PerInstanceFadeAmount` is
+non-Nanite only, Epic staff), which is why the Nanite trees hard-popped while
+every other tree dissolved. It also hit UE-215526 — masked material on a
+multi-slot mesh mis-culls clusters — which was the "second material glitch".
+With Nanite off, `r.Nanite.MaxCandidateClusters` went back to vanilla: ~200 MB
+of GPU memory returned, and `r.Nanite.MaxVisibleClusters` turned out to have
+been set to exactly the game's default all along.
+
+**Quality tiers: measured and rejected**
+Two knobs, two budgets — LoadingRange buys RAM, `foliage.CullDistanceScale`
+buys GPU. HIGH (2 km / 500 m draw) cost 2 s of load, 1 GB and 5% of frame
+rate; EXTREME (4 km / 1 km draw) more again. Neither is worth it in play. Kept
+in `builds/README.md` because the measurement says something useful: **the
+island is not GPU-bound on foliage.** When more detail lands on the map,
+LoadingRange is the number that will move.
+
+**Still open**
+- `SM_Grass_Clump_03` is 794k of 3.48M instances. Thinning it in the editor
+  costs nothing at runtime, and is the only remaining easy win.
+- `Nature/SM_tree_02` (296) and `SM_Tree_07` (276) are anomalies next to their
+  86k siblings — probably deletable.
+- `SM_tree_02` still ships 3 and 2 collision primitives where 1 would do.
 
 ---
 
@@ -631,3 +664,26 @@ bugs — a missing archetype and missing export metadata — in twenty minutes.
 **Do not reason from an ini's silence.** `r.SupportLocalFogVolumes` was
 declared impossible because no shipped ini mentioned it. Its default is 1.
 Working code was deleted on that inference and had to be restored.
+
+**Count the thing before optimising the thing.** RAM was chased through
+Nanite, then through 7.4M collision primitives — a day's work that bought a
+real but modest 12->9 GB. Ten minutes of actually counting what was RESIDENT
+found 996k instances held permanently, and one number fixed it. The measured
+quantity was never in doubt and was never measured.
+
+**A guard that reads the wrong input is worse than no guard.** The
+cull-vs-unload invariant had been reporting for weeks against MainGrid's
+loading range while the foliage it guarded lived on the Landscape grid. It
+printed a confident, precise, wrong number every build, which is exactly what
+stopped anyone looking.
+
+**Do not diagnose from one correlation and then act on it.** A crash landed a
+minute after a build, the compats were 20 hours stale, and a whole guard got
+written on that theory. The compats were innocent: the recipe `.uexp` was
+byte-identical and that pairing had been played for an hour. The real cause
+was an editor export landing DURING the build. The evidence that settled it
+took five minutes and was available before the theory.
+
+**Never re-export while a build is running.** Foliage injection reads the
+shards partway through, so an export landing mid-build silently mixes two
+scenes into one map. Nothing errors.
