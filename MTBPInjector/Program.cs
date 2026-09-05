@@ -7971,6 +7971,19 @@ internal static class Program
         asset.FolderName = new FString(newPkg);
         mi.ObjectName = FName.FromString(asset, newName);
 
+        // --keep-params: the template's parameter values are only foreign when
+        // the new parent is a DIFFERENT material. Derive an instance that keeps
+        // the template's own parent and they are exactly what makes it look
+        // like the template -- dropping them yields a bare master material
+        // (the "grey kerb" failure materials.json warns about). The static
+        // permutation properties below are dropped either way; they describe a
+        // compiled shader that no longer belongs to this asset.
+        bool keepParams = f.ContainsKey("keep-params");
+        string[] tunables = {
+            "ScalarParameterValues", "VectorParameterValues", "TextureParameterValues",
+            "FontParameterValues", "RuntimeVirtualTextureParameterValues",
+            "DoubleVectorParameterValues", "BasePropertyOverrides",
+        };
         string[] overrideProps = {
             "ScalarParameterValues", "VectorParameterValues", "TextureParameterValues",
             "FontParameterValues", "RuntimeVirtualTextureParameterValues",
@@ -7986,9 +7999,12 @@ internal static class Program
         };
         foreach (var nm in overrideProps)
         {
+            if (keepParams && Array.IndexOf(tunables, nm) >= 0) continue;
             var p = mi.Data.FirstOrDefault(q => q.Name.ToString() == nm);
             if (p != null) { mi.Data.Remove(p); Console.WriteLine($"  dropped {nm} (the template's own)"); }
         }
+        if (keepParams)
+            Console.WriteLine("  kept the template's parameter values (--keep-params)");
 
         int Link(string fullPath, string className)
         {

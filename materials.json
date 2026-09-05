@@ -111,6 +111,34 @@
         "existing": "DC/Materials/MI_DC_DirtBase"
       },
       "_": "Dirt is snow divided by three: (13.75;55) -> (4.58;18.3). Vanilla ships PM_DirtRoad with NO digging block at all and PM_Dirt at depth 0.5-3, which is why the dirt reads as solid and bumpy. Resistance matches snow so depth is the only variable between the two surfaces. PARENT LEFT ALONE: unlike the snow instances, these are authored -- two scalar parameters, a vector parameter and base property overrides on M_BaseColor. Reparenting them to a vanilla dirt material would discard that look. Only the PhysMaterial is wired here."
+    },
+    {
+      "key": "Arini_GrassHill",
+      "physmat": {
+        "from": "Physics/PM_Dirt",
+        "to": "DC/Physics/PM_Arini_GrassHill",
+        "set": {
+          "bAllowDigging": true,
+          "DiggingDepth": "(4.58;18.3)",
+          "DiggingSpeed": 3,
+          "DiggingResistForceMultiplier": 2,
+          "bIsOffroad": true
+        }
+      },
+      "material": {
+        "template": "AssetsvilleTown2/Materials/MI_Grass2",
+        "to": "DC/Materials/MI_Arini_GrassHill",
+        "parent": "/Game/AssetsvilleTown2/Materials/MasterMaterials/M_BaseColor",
+        "parent_class": "Material",
+        "keep_params": true
+      },
+      "remap": {
+        "from": "/Game/AssetsvilleTown2/Materials/MI_Grass2",
+        "folders": [
+          "VRS_LowPolyNature"
+        ]
+      },
+      "_": "The 17,116 SM_DarkDirtLowHillA patches. MI_Grass2 declares NO PhysMaterial and its parent M_BaseColor declares none either, so it fell through to the ENGINE DEFAULT -- friction 0.7, not offroad, no digging. That is why grass drove like asphalt. Depth matches Arini_DirtBase (4.58;18.3), the wild dirt, because these are wild hills. Built from PM_Dirt and not PM_Grass deliberately: PM_Grass has RollingResistance 20 against dirt's 7, so grass-plus-digging would be the slowest surface on the island. Set RollingResistance 20 here if it should drag like grass after all. SurfaceType2 comes with PM_Dirt and gives dirt wheel spray via fx_map_entries. TEMPLATE, not 'existing': MI_Grass2 is a VANILLA asset, so wiring a physmat onto it in place would change grass for the whole game; this derives a new instance beside it and repoints the one mesh using it. keep_params because the parent here is MI_Grass2's OWN parent -- the template's parameter values are exactly what make it look like grass, and the default drop left a bare master material. Do NOT set parent to MI_Grass2 itself: rename-package rewrites every name ending in /MI_Grass2 before Link() runs, so the parent import lands on OUR package and resolves to nothing."
     }
   ],
   "fx_map_entries": [

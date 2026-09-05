@@ -47,6 +47,16 @@ def main() -> int:
                                env=e, capture_output=True, text=True)
             for l in r.stdout.splitlines():
                 if l.strip(): print("    " + l.strip())
+            # After sync_cooked, never before: build_materials repoints a
+            # staged MESH at our derived material, and the sync would copy the
+            # cooked mesh back over it. Idempotent -- the remap skips a mesh
+            # that no longer names the source material.
+            r = subprocess.run([sys.executable, "build_materials.py"],
+                               env=e, capture_output=True, text=True)
+            for l in r.stdout.splitlines():
+                if l.strip(): print("    " + l.strip())
+            if r.returncode:
+                print(r.stderr, file=sys.stderr); rc = 1
             r = subprocess.run([sys.executable, "worldmap_align.py", str(content)],
                                env=e, capture_output=True, text=True)
             for l in r.stdout.splitlines():

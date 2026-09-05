@@ -150,7 +150,12 @@ def build_derived(entries) -> bool:
                     "--name", mname, "--package", mpkg,
                     "--parent", mat["parent"],
                     "--parent-class", mat.get("parent_class", "Material"),
-                    "--physmat", "/Game/" + pm["to"], "--mappings", str(MAPPINGS)],
+                    "--physmat", "/Game/" + pm["to"], "--mappings", str(MAPPINGS)]
+                   # keep_params: only when the derived instance keeps the
+                   # TEMPLATE's own parent. Then the template's parameter
+                   # values are what make it look like the template, and
+                   # dropping them leaves a bare master material.
+                   + (["--keep-params"] if mat.get("keep_params") else []),
                    "make-material-instance")
         for ext in (".uasset", ".uexp"):
             tmp.with_suffix(ext).unlink(missing_ok=True)

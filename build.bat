@@ -511,11 +511,6 @@ if not "%MTMI_SKIP_VEHICLES%"=="1" (
 
 rem Physical materials from materials.json. Same shape as vehicles: copy the
 rem asset the GAME loads, patch it, ship our copy over the top.
-if not "%MTMI_SKIP_MATERIALS%"=="1" (
-    echo [%TIME%] [5b3] Patching physical materials from materials.json...
-    python build_materials.py
-    if errorlevel 1 exit /b 1
-) else ( echo [%TIME%] [5b3] skipped ^(MTMI_SKIP_MATERIALS=1^) )
 
 if not "%MTMI_SKIP_CONFIG%"=="1" (
     echo [%TIME%] [5c] Merging console variables ^(mod-aware^)...
@@ -532,6 +527,17 @@ if not "%MTMI_DELTA%"=="1" (
     python sync_cooked.py "%MODCONTENT%"
     if errorlevel 1 exit /b 1
 )
+
+rem MUST run AFTER [5e0]. build_materials repoints a staged MESH at our
+rem derived material; sync_cooked would then copy the cooked mesh back over
+rem it and silently undo the remap. Patches go on last, over whatever the
+rem cook produced -- which is also why material.existing entries no longer
+rem need sync_cooked to protect them.
+if not "%MTMI_SKIP_MATERIALS%"=="1" (
+    echo [%TIME%] [5e0b] Patching physical materials from materials.json...
+    python build_materials.py
+    if errorlevel 1 exit /b 1
+) else ( echo [%TIME%] [5e0b] skipped ^(MTMI_SKIP_MATERIALS=1^) )
 
 rem The in-game map is a texture AND the world rectangle the game thinks it
 rem covers. Ship one without the other and the island sits right while every
@@ -598,6 +604,15 @@ if "%STEP_PACK%"=="1" (
         exit /b 1
     )
     if exist "%DEPLOYED%.lastgood" del "%DEPLOYED%.lastgood"
+
+    rem A compat pak mounts AFTER the base and overrides its Mod* delivery-
+    rem point classes -- that is the mechanism. So the two must be generated
+    rem together. Rebuild only the base and the game asserts on load:
+    rem "SceneComponent ... had RF_NeedLoad when being set up as an archetype".
+    rem Each pak verifies fine alone; only a look ACROSS them catches it.
+    rem Warning, not a failure: mid-sequence staleness is expected while the
+    rem remaining layers are still building.
+    python check_layer_sync.py --quiet
     REM Regenerate the economy page from what we just shipped, so the
     REM haul-this-there reference can never drift from the pak.
     python economy_report.py
