@@ -93,6 +93,7 @@ internal static class Program
                 "dump-table" => DumpTable(args.Skip(1).ToArray()),
                 "set-worldmap" => SetWorldMap(args.Skip(1).ToArray()),
                 "set-loading-range" => SetLoadingRangeCmd(args.Skip(1).ToArray()),
+                "verify-typenames" => VerifyTypeNames(args.Skip(1).ToArray()),
                 "clone-vehicle-row" => CloneVehicleRow(args.Skip(1).ToArray()),
                 "vehicle-awd" => VehicleAllWheelDrive(args.Skip(1).ToArray()),
                 "vehicle-fuel-pump" => VehicleFuelPump(args.Skip(1).ToArray()),
@@ -3324,6 +3325,70 @@ internal static class Program
     // ALL times, 29% of the island. It is the whole RAM and teleport-time
     // cost. MTMI_WP_LOADING_RANGE never reached it -- that only ever wrote
     // MainGrid.
+    // Check the DERIVED PropertyTypeName against the real one, on an asset
+    // that already has them.
+    //
+    // A versioned package carries a type name for every property. When this
+    // toolchain constructs a property it has none, so MainSerializer derives
+    // one -- and a derived name that is subtly wrong produces a package the
+    // game accepts and then crashes on, with an access violation and no
+    // symbols. That is a 40-minute build and a server restart per guess.
+    //
+    // So: take an asset whose names are REAL, derive one for every property,
+    // and diff. Thousands of samples, two seconds, and it names the property
+    // type that is wrong instead of leaving it to bisection.
+    private static int VerifyTypeNames(string[] args)
+    {
+        var f = ParseFlags(args);
+        var asset = new UAsset(f["cell"], EngineVer, LoadMappings(f["mappings"]));
+        int ok = 0, bad = 0;
+        var seen = new SortedDictionary<string, string>();
+
+        string Render(FPropertyTypeName t) => t?.Nodes == null ? "(null)"
+            : "[" + string.Join(" ", t.Nodes.Select(n => $"{n.Name}:{n.InnerCount}")) + "]";
+
+        void Walk(IList<PropertyData> data)
+        {
+            if (data == null) return;
+            foreach (var prop in data)
+            {
+                if (prop == null) continue;
+                if (prop.PropertyTypeName?.Nodes is { Count: > 0 })
+                {
+                    string real = Render(prop.PropertyTypeName);
+                    var saved = prop.PropertyTypeName;
+                    prop.PropertyTypeName = null;
+                    string got;
+                    try { got = Render(MainSerializer.DeriveTypeName(prop, asset)); }
+                    catch (Exception e) { got = "THREW: " + e.Message; }
+                    prop.PropertyTypeName = saved;
+                    if (real == got) ok++;
+                    else
+                    {
+                        bad++;
+                        string key = prop.GetType().Name + "  real=" + real;
+                        if (!seen.ContainsKey(key)) seen[key] = got;
+                    }
+                }
+            }
+        }
+
+        // TOP-LEVEL properties only. A nested property's stored chain is a
+        // GetParameter SLICE of its parent's -- it legitimately carries
+        // trailing nodes belonging to its siblings, so comparing it against a
+        // standalone derivation compares two different things.
+        foreach (var e in asset.Exports)
+            if (e is NormalExport ne && ne.Data != null)
+                foreach (var prop in ne.Data) Walk(new List<PropertyData> { prop });
+        Console.WriteLine($"  {ok} match, {bad} MISMATCH");
+        foreach (var kv in seen)
+        {
+            Console.WriteLine($"    {kv.Key}");
+            Console.WriteLine($"      derived={kv.Value}");
+        }
+        return bad == 0 ? 0 : 1;
+    }
+
     private static int SetLoadingRangeCmd(string[] args)
     {
         var f = ParseFlags(args);
