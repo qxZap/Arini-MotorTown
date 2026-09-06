@@ -344,6 +344,11 @@ if defined MTMI_LAYER (
     rem build silently read the CLIENT map -- producing a client-cooked,
     rem unversioned map with the right filename and the wrong contents.
     set "VANILLA_MAP=!MTMI_GAME_CONTENT!\Maps\Jeju\Jeju_World.umap"
+    rem Same story for the DEPLOY target: MTMI_GAME_PAKDIR is derived from
+    rem MT_GAME_DIR at line ~152, long before the layer supplies its own. The
+    rem server pak was being copied into the CLIENT's Paks folder, where it
+    rem does not belong and the client would try to mount it.
+    set "MTMI_GAME_PAKDIR=!MT_GAME_DIR!\MotorTown\Content\Paks"
     echo   layer game content: !MTMI_GAME_CONTENT!
     if errorlevel 1 (
         echo   layer "%MTMI_LAYER%" could not be resolved -- see mods.json

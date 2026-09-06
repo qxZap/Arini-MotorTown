@@ -6737,7 +6737,9 @@ internal static class Program
         int levelNum = levelIdx + 1;
 
         var newActorNums = new List<int>();
-        void AddRaw(RawExport e)
+        // Takes any Export: a versioned target gets typed NormalExports here
+        // rather than the unversioned byte blobs.
+        void AddRaw(Export e)
         {
             asset.Exports.Add(e);
             asset.DependsMap?.Add(Array.Empty<int>());   // shared singleton — cheap
@@ -6747,7 +6749,21 @@ internal static class Program
 
         // -------------------- DEALERSHIPS --------------------
         int nDealers = 0;
-        if (config["dealerships"] is JObject dealerSection)
+        // MTMI_SKIP_DEALERS=1: leave the 24 MTDealerVehicleSpawnPoint actors
+        // out. They are the one piece of the island a DEDICATED SERVER will
+        // not load -- it hangs during startup, before its first log line, with
+        // flat memory and no crash dump. Everything else (15,042 props, the
+        // cells, foliage, delivery points, the economy) loads and the server
+        // lists normally without them. Their actor body is still a
+        // reverse-engineered UNVERSIONED blob (BuildDealerActorData), which is
+        // meaningless in the versioned server cook; the static meshes had the
+        // same problem and were fixed by building them as typed properties.
+        // Doing the same for dealers needs a real MTDealerVehicleSpawnPoint to
+        // model, and there is none in any cell -- they live in the persistent
+        // map, which is a 25-minute parse.
+        bool skipDealers = Environment.GetEnvironmentVariable("MTMI_SKIP_DEALERS") == "1";
+        if (skipDealers) Console.WriteLine("  dealerships skipped (MTMI_SKIP_DEALERS=1)");
+        if (!skipDealers && config["dealerships"] is JObject dealerSection)
         {
             int mtPkg        = FindOrAddImport(asset, "/Script/MotorTown", 0, "/Script/CoreUObject", "Package");
             int dealerClass  = FindOrAddImport(asset, "MTDealerVehicleSpawnPoint", mtPkg, "/Script/CoreUObject", "Class");
@@ -7016,14 +7032,33 @@ internal static class Program
                 if (substituted) { sx *= debugMeshScale; sy *= debugMeshScale; sz *= debugMeshScale; }
                 int actorNum = asset.Exports.Count + 1;
                 int compNum  = asset.Exports.Count + 2;
-                AddRaw(NewRaw(asset, BuildSmaActorData(compNum, exportName),
-                    $"StaticMeshActor_MOD_{nMeshes}", levelNum, smaClass, defaultSma,
-                    EObjectFlags.RF_Transactional, false,
-                    cbsd: new[] { compNum }, sbcd: new[] { smaClass, defaultSma, smc0Tpl }, cbcd: new[] { levelNum }));
-                AddRaw(NewRaw(asset, BuildSmcData(meshImp, x, y, z, pitch, yaw, roll, sx, sy, sz),
-                    "StaticMeshComponent0", actorNum, smcClass, smc0Tpl,
-                    EObjectFlags.RF_Transactional | EObjectFlags.RF_DefaultSubObject, true,
-                    cbsd: new[] { meshImp }, sbcd: new[] { smcClass, smc0Tpl }, cbcd: new[] { actorNum }));
+                // Unversioned target (the client cook): the proven byte blobs.
+                // Versioned target (the dedicated server): real properties, or
+                // the blob's bare values are read as garbage and the server
+                // hangs on load. See the typed builders above.
+                if (asset.HasUnversionedProperties)
+                {
+                    AddRaw(NewRaw(asset, BuildSmaActorData(compNum, exportName),
+                        $"StaticMeshActor_MOD_{nMeshes}", levelNum, smaClass, defaultSma,
+                        EObjectFlags.RF_Transactional, false,
+                        cbsd: new[] { compNum }, sbcd: new[] { smaClass, defaultSma, smc0Tpl }, cbcd: new[] { levelNum }));
+                    AddRaw(NewRaw(asset, BuildSmcData(meshImp, x, y, z, pitch, yaw, roll, sx, sy, sz),
+                        "StaticMeshComponent0", actorNum, smcClass, smc0Tpl,
+                        EObjectFlags.RF_Transactional | EObjectFlags.RF_DefaultSubObject, true,
+                        cbsd: new[] { meshImp }, sbcd: new[] { smcClass, smc0Tpl }, cbcd: new[] { actorNum }));
+                }
+                else
+                {
+                    AddRaw(NewTyped(asset, BuildSmaActorProps(asset, compNum), MakeActorExtras(exportName),
+                        $"StaticMeshActor_MOD_{nMeshes}", levelNum, smaClass, defaultSma,
+                        EObjectFlags.RF_Transactional, false,
+                        cbsd: new[] { compNum }, sbcd: new[] { smaClass, defaultSma, smc0Tpl }, cbcd: new[] { levelNum }));
+                    AddRaw(NewTyped(asset, BuildSmcProps(asset, meshImp, x, y, z, pitch, yaw, roll, sx, sy, sz),
+                        SMC_EXTRAS,
+                        "StaticMeshComponent0", actorNum, smcClass, smc0Tpl,
+                        EObjectFlags.RF_Transactional | EObjectFlags.RF_DefaultSubObject, true,
+                        cbsd: new[] { meshImp }, sbcd: new[] { smcClass, smc0Tpl }, cbcd: new[] { actorNum }));
+                }
                 newActorNums.Add(actorNum);
                 nMeshes++;
                 if (nMeshes % 500000 == 0) Console.WriteLine($"  ... {nMeshes} meshes built");
@@ -7222,6 +7257,114 @@ internal static class Program
                 if (line.Length == 0) continue;
                 yield return JObject.Parse(line);
             }
+        }
+    }
+
+    // ---- Typed builders, for a VERSIONED target ---------------------------
+    //
+    // BuildSmcData/BuildSmaActorData below write an UNVERSIONED property blob:
+    // a leading schema bitmask, then bare values, no names and no types. That
+    // is exactly what the client cook wants and it is byte-exact there.
+    //
+    // The DEDICATED SERVER cook is versioned -- every property carries its name
+    // and type inline -- so those same bytes are read as garbage. The server
+    // does not crash cleanly on it either: it hangs during startup, before it
+    // writes a single log line, with flat memory and no crash dump. That cost
+    // most of a night to bisect down to these 15,042 actors.
+    //
+    // So when the target package is versioned, build real properties and let
+    // the serializer emit whatever format the package uses. The unversioned
+    // path is left exactly as it was, because it is proven.
+
+    // The 16 bytes a StaticMeshComponent carries AFTER its properties, copied
+    // from a real one in the server cook:
+    //     ExtrasLen=16  00-00-00-00-00-00-00-00-01-00-00-00-00-00-00-00
+    // The unversioned blob wrote this tail inline; the typed path has to pass
+    // it as Extras. Omitting it truncates every component, and the server
+    // hangs on load with no crash and no log.
+    private static readonly byte[] SMC_EXTRAS =
+        { 0,0,0,0, 0,0,0,0, 1,0,0,0, 0,0,0,0 };
+
+    private static StructPropertyData MathStruct(UAsset a, string name, string structName,
+                                                 double v0, double v1, double v2)
+    {
+        EnsureName(a, name); EnsureName(a, structName);
+        PropertyData inner = structName == "Rotator"
+            ? new RotatorPropertyData(FName.FromString(a, name)) { Value = new FRotator(v0, v1, v2) }
+            : new VectorPropertyData(FName.FromString(a, name)) { Value = new FVector(v0, v1, v2) };
+        return new StructPropertyData(FName.FromString(a, name), FName.FromString(a, structName))
+        {
+            Value = new List<PropertyData> { inner },
+        };
+    }
+
+    private static List<PropertyData> BuildSmaActorProps(UAsset a, int compRef)
+    {
+        EnsureName(a, "StaticMeshComponent"); EnsureName(a, "RootComponent");
+        return new List<PropertyData>
+        {
+            new ObjectPropertyData(FName.FromString(a, "StaticMeshComponent")) { Value = new FPackageIndex(compRef) },
+            new ObjectPropertyData(FName.FromString(a, "RootComponent"))       { Value = new FPackageIndex(compRef) },
+        };
+    }
+
+    private static List<PropertyData> BuildSmcProps(UAsset a, int meshImpRef,
+        double x, double y, double z, double pitch, double yaw, double roll,
+        double sx, double sy, double sz)
+    {
+        EnsureName(a, "StaticMesh"); EnsureName(a, "Mobility");
+        EnsureName(a, "EComponentMobility"); EnsureName(a, "EComponentMobility::Movable");
+        EnsureName(a, "CachedMaxDrawDistance");
+        // EXACTLY the properties a real StaticMeshActor's component carries in
+        // the shipped cook -- StaticMesh and the transform, nothing else.
+        //
+        // The unversioned blob also wrote Mobility=Movable and
+        // CachedMaxDrawDistance. AStaticMeshActor builds its root component
+        // Static in its constructor, so forcing it Movable through
+        // serialization leaves the component disagreeing with its own class.
+        // The client tolerates that; the server does not, and hangs during
+        // load with no crash and no log line.
+        var props = new List<PropertyData>
+        {
+            new ObjectPropertyData(FName.FromString(a, "StaticMesh")) { Value = new FPackageIndex(meshImpRef) },
+            MathStruct(a, "RelativeLocation", "Vector", x, y, z),
+            MathStruct(a, "RelativeRotation", "Rotator", pitch, yaw, roll),
+        };
+        if (!(sx == 1.0 && sy == 1.0 && sz == 1.0))
+            props.Add(MathStruct(a, "RelativeScale3D", "Vector", sx, sy, sz));
+        return props;
+    }
+
+    private static NormalExport NewTyped(UAsset asset, List<PropertyData> props, byte[] extras,
+        string name, int outer, int classIdx, int templateIdx, EObjectFlags flags, bool inherited,
+        int[]? cbsd, int[]? sbcd, int[]? cbcd)
+    {
+        List<FPackageIndex> Mk(int[]? arr) => arr == null
+            ? new List<FPackageIndex>()
+            : arr.Select(n => new FPackageIndex(n)).ToList();
+        // Built through the CONSTRUCTOR, not an object initializer: that is
+        // what the fog-volume injection does and it is the one typed-export
+        // path already proven to load. An initializer-only export skips
+        // whatever the constructor sets up.
+        var e = new NormalExport(asset, extras ?? Array.Empty<byte>());
+        e.Data = props;
+        return Fill(e);
+
+        NormalExport Fill(NormalExport x)
+        {
+            x.ObjectName = FName.FromString(asset, name);
+            x.ClassIndex = new FPackageIndex(classIdx);
+            x.SuperIndex = new FPackageIndex(0);
+            x.TemplateIndex = new FPackageIndex(templateIdx);
+            x.OuterIndex = new FPackageIndex(outer);
+            x.ObjectFlags = flags;
+            x.IsInheritedInstance = inherited;
+            x.bNotAlwaysLoadedForEditorGame = true;
+            x.SerializationBeforeSerializationDependencies = new List<FPackageIndex>();
+            x.CreateBeforeSerializationDependencies = Mk(cbsd);
+            x.SerializationBeforeCreateDependencies = Mk(sbcd);
+            x.CreateBeforeCreateDependencies = Mk(cbcd);
+            return x;
         }
     }
 
