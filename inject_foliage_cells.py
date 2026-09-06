@@ -64,6 +64,21 @@ SOLID_PROFILE = "BlockAll"
 # are resident before they enter view. 0 disables. Set MTMI_FOLIAGE_CELL_PAD.
 CELL_PAD = float(os.environ.get("MTMI_FOLIAGE_CELL_PAD", "25600"))
 
+# MTMI_FOLIAGE_COLLIDABLE_ONLY=1: ship only foliage that COLLIDES.
+#
+# A dedicated server does not render. The only reason foliage exists there is
+# so vehicles hit trees, which means a mesh cooked NoCollision -- all the
+# grass, corn and wheat -- does nothing on a server but cost memory. That is
+# 1,524,740 of 3,478,884 instances, 44% of the total, for nothing.
+#
+# It matters because a server has no streaming source until a player joins, so
+# the Landscape grid's loading range does not bound it the way it does on a
+# client: it loads every cell at once and sits on 17 GB, never finishing its
+# Steam session.
+#
+# Client builds must NEVER set this -- there the grass is the point.
+COLLIDABLE_ONLY = os.environ.get("MTMI_FOLIAGE_COLLIDABLE_ONLY", "") == "1"
+
 # What the Landscape grid ships with when MTMI_LANDSCAPE_LOADING_RANGE is
 # unset. Foliage cells live on that grid, so this -- not MainGrid's 25600 --
 # is the distance a cell stays resident to.
@@ -407,6 +422,21 @@ def main() -> int:
     # collision box and the change reaches the game on the next build --
     # no scene re-export, and nothing quietly reverting your edit.
     mesh_collision.update(read_shipped_collision(mesh_paths, im))
+
+    # SERVER builds: drop foliage that cannot collide. It renders on nobody
+    # and blocks nothing, so on a dedicated server it is pure memory.
+    if COLLIDABLE_ONLY:
+        drop = {k for k, v in mesh_collision.items() if v == "NoCollision"}
+        if drop:
+            before_i = sum(len(v) for v in groups.values())
+            groups = {k: v for k, v in groups.items() if k[1] not in drop}
+            after_i = sum(len(v) for v in groups.values())
+            mesh_paths = {k: v for k, v in mesh_paths.items() if k not in drop}
+            print(f"  collidable-only: dropped {len(drop)} mesh(es), "
+                  f"{before_i - after_i:,} of {before_i:,} instance(s) "
+                  f"({(before_i - after_i) / max(before_i, 1) * 100:.0f}%)")
+            for d in sorted(drop):
+                print(f"    - {d.rsplit('/', 1)[-1]}")
 
     # State the resolved mesh set explicitly, every build. The seasonal remap
     # is an .env value, so without this the only way to find out which set

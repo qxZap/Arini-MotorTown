@@ -111,6 +111,16 @@ REQUIRED: dict[str, dict[str, str]] = {
         # Local fog volumes are off by default in a cooked build: the actors load
         # and draw nothing without this. Only shipped when the scene has some.
         **({"r.SupportLocalFogVolumes": "1"} if _local_fog_volumes() else {}),
+        # DEDICATED SERVER only. Entering the island makes the server stream in
+        # its cells, and stock settings load 4 at a time while BLOCKING the
+        # game thread on slow streaming. The server survives it -- it logs a
+        # clean Player Logout -- but it stops answering long enough for the
+        # client to time out, so teleporting to Arini drops the connection.
+        # Neither belongs in a client build: blocking is what stops a client
+        # driving into terrain that has not arrived yet.
+        **({"wp.Runtime.BlockOnSlowStreaming": "0",
+            "wp.Runtime.MaxLoadingStreamingCells": "16"}
+           if _cfg("MTMI_SERVER_CVARS", "") == "1" else {}),
         # Quality tier: multiplies the baked per-instance cull distance so
         # "see twice as far" is an ini change, not a 12-minute rebuild.
         # Absent (or 1) ships nothing -- every key here is a value taken away

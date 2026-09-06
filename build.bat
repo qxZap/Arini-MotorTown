@@ -350,6 +350,24 @@ if defined MTMI_LAYER (
     rem does not belong and the client would try to mount it.
     set "MTMI_GAME_PAKDIR=!MT_GAME_DIR!\MotorTown\Content\Paks"
     echo   layer game content: !MTMI_GAME_CONTENT!
+
+    rem A layer may switch off foliage ENTIRELY. NOT MTMI_SKIP_FOLIAGE --
+    rem that is set to 1 on every build already and means something else:
+    rem "drop fol_* from the MESH stage", because foliage ships as cells in
+    rem step [4]. Reading it here would have switched foliage cells off for
+    rem EVERY build, client included, which is how the island lost its
+    rem foliage once before.
+    rem The DEDICATED SERVER sets MTMI_NO_FOLIAGE: it never
+    rem renders, and a server with no players connected has no streaming
+    rem source, so the Landscape grid loads EVERY foliage cell at once --
+    rem ~1.95M colliding instances, 17 GB, and it never finishes creating its
+    rem Steam session. Clients still carry the foliage in their own pak and
+    rem both see and hit it. NEVER set this for a client build: leaving it out
+    rem there erases the island.
+    if "!MTMI_NO_FOLIAGE!"=="1" (
+        set "STEP_FOLIAGE=0"
+        echo   layer skips foliage ^(server: client-side decoration^)
+    )
     if errorlevel 1 (
         echo   layer "%MTMI_LAYER%" could not be resolved -- see mods.json
         exit /b 1
