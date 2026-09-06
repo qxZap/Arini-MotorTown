@@ -109,3 +109,7 @@ ZZZZZ_TankersFuelPump_Arini_P/
 
 # Archived tier paks: 1.1 GB each, reproducible from their env.snapshot
 /builds/*/*.pak
+
+# The FRAMEWORK, checked out here so both can be worked on together.
+# It is its own repo: github.com/qxZap/MTMapInjector
+/MTMapInjector/

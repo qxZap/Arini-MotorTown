@@ -6804,14 +6804,32 @@ internal static class Program
                     double pitch = (double?)e["Pitch"] ?? 0, yaw = (double?)e["Yaw"] ?? 0, roll = (double?)e["Roll"] ?? 0;
                     int actorNum = asset.Exports.Count + 1;
                     int compNum  = asset.Exports.Count + 2;
-                    AddRaw(NewRaw(asset, BuildDealerActorData(vehImp, compNum, vehKey),
-                        $"MTDealerVehicleSpawnPoint_MOD_{nDealers}", levelNum, dealerClass, defaultDealer,
-                        EObjectFlags.RF_Transactional, false,
-                        cbsd: new[] { vehImp, compNum }, sbcd: new[] { dealerClass, defaultDealer, rootsceneTpl }, cbcd: new[] { levelNum }));
-                    AddRaw(NewRaw(asset, BuildDealerRootScene(x, y, z, pitch, yaw, roll),
-                        "RootScene", actorNum, sceneClass, rootsceneTpl,
-                        EObjectFlags.RF_Transactional | EObjectFlags.RF_DefaultSubObject, true,
-                        cbsd: null, sbcd: new[] { sceneClass, rootsceneTpl }, cbcd: new[] { actorNum }));
+                    // Same split as the static meshes: the unversioned blob for
+                    // the client cook, real properties for the versioned server
+                    // cook. Shipping the blob to a server gave the island no
+                    // vehicle dealerships at all.
+                    if (asset.HasUnversionedProperties)
+                    {
+                        AddRaw(NewRaw(asset, BuildDealerActorData(vehImp, compNum, vehKey),
+                            $"MTDealerVehicleSpawnPoint_MOD_{nDealers}", levelNum, dealerClass, defaultDealer,
+                            EObjectFlags.RF_Transactional, false,
+                            cbsd: new[] { vehImp, compNum }, sbcd: new[] { dealerClass, defaultDealer, rootsceneTpl }, cbcd: new[] { levelNum }));
+                        AddRaw(NewRaw(asset, BuildDealerRootScene(x, y, z, pitch, yaw, roll),
+                            "RootScene", actorNum, sceneClass, rootsceneTpl,
+                            EObjectFlags.RF_Transactional | EObjectFlags.RF_DefaultSubObject, true,
+                            cbsd: null, sbcd: new[] { sceneClass, rootsceneTpl }, cbcd: new[] { actorNum }));
+                    }
+                    else
+                    {
+                        AddRaw(NewTyped(asset, BuildDealerActorProps(asset, vehImp, compNum), MakeActorExtras(vehKey),
+                            $"MTDealerVehicleSpawnPoint_MOD_{nDealers}", levelNum, dealerClass, defaultDealer,
+                            EObjectFlags.RF_Transactional, false,
+                            cbsd: new[] { vehImp, compNum }, sbcd: new[] { dealerClass, defaultDealer, rootsceneTpl }, cbcd: new[] { levelNum }));
+                        AddRaw(NewTyped(asset, BuildDealerRootSceneProps(asset, x, y, z, pitch, yaw, roll), ROOTSCENE_EXTRAS,
+                            "RootScene", actorNum, sceneClass, rootsceneTpl,
+                            EObjectFlags.RF_Transactional | EObjectFlags.RF_DefaultSubObject, true,
+                            cbsd: null, sbcd: new[] { sceneClass, rootsceneTpl }, cbcd: new[] { actorNum }));
+                    }
                     newActorNums.Add(actorNum);
                     nDealers++;
                 }
@@ -7295,6 +7313,43 @@ internal static class Program
             Value = new List<PropertyData> { inner },
         };
     }
+
+    // A dealer spawn point and its root scene, as REAL properties. Shapes read
+    // back off our own injected ones in the client map, which is the only place
+    // a MTDealerVehicleSpawnPoint exists outside the persistent level:
+    //
+    //   MTDealerVehicleSpawnPoint_MOD_0   Data.Count=4  Extras=label+GUID
+    //       VehicleClass             -> vehicle class
+    //       EditorVisualVehicleClass -> vehicle class
+    //       SceneComponent           -> the component
+    //       RootComponent            -> the component
+    //   RootScene                         Data.Count=2  ExtrasLen=4 (zeros)
+    //       RelativeLocation, RelativeRotation
+    //
+    // Without these the island has no vehicle dealerships on a dedicated
+    // server -- there is nowhere to buy a car.
+    private static readonly byte[] ROOTSCENE_EXTRAS = { 0, 0, 0, 0 };
+
+    private static List<PropertyData> BuildDealerActorProps(UAsset a, int vehicleClassRef, int sceneCompRef)
+    {
+        EnsureName(a, "VehicleClass"); EnsureName(a, "EditorVisualVehicleClass");
+        EnsureName(a, "SceneComponent"); EnsureName(a, "RootComponent");
+        return new List<PropertyData>
+        {
+            new ObjectPropertyData(FName.FromString(a, "VehicleClass"))             { Value = new FPackageIndex(vehicleClassRef) },
+            new ObjectPropertyData(FName.FromString(a, "EditorVisualVehicleClass")) { Value = new FPackageIndex(vehicleClassRef) },
+            new ObjectPropertyData(FName.FromString(a, "SceneComponent"))           { Value = new FPackageIndex(sceneCompRef) },
+            new ObjectPropertyData(FName.FromString(a, "RootComponent"))            { Value = new FPackageIndex(sceneCompRef) },
+        };
+    }
+
+    private static List<PropertyData> BuildDealerRootSceneProps(UAsset a,
+        double x, double y, double z, double pitch, double yaw, double roll)
+        => new List<PropertyData>
+        {
+            MathStruct(a, "RelativeLocation", "Vector", x, y, z),
+            MathStruct(a, "RelativeRotation", "Rotator", pitch, yaw, roll),
+        };
 
     private static List<PropertyData> BuildSmaActorProps(UAsset a, int compRef)
     {

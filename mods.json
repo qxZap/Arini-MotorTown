@@ -192,7 +192,6 @@
         "MT_GAME_DIR": "${MT_SERVER_DIR}",
         "MTMI_GAME_CONTENT": "${MTMI_REPO_ROOT}/vanilla_extract_server/MotorTown/Content",
         "MTMI_COOKED_CONTENT": "${MTMI_COOKED_CONTENT_SERVER}",
-        "MTMI_SKIP_DEALERS": "1",
         "MTMI_SERVER_CVARS": "1",
         "MTMI_NO_FOLIAGE": "1"
       },

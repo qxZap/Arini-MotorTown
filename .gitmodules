@@ -1,3 +1,4 @@
 [submodule "MTBPInjector/UAssetAPI"]
 	path = MTBPInjector/UAssetAPI
-	url = https://github.com/atenfyr/UAssetAPI.git
+	url = https://github.com/qxZap/UAssetAPI.git
+	branch = motortown-versioned-write
