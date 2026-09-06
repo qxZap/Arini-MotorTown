@@ -66,15 +66,16 @@ CELL_PAD = float(os.environ.get("MTMI_FOLIAGE_CELL_PAD", "25600"))
 
 # MTMI_FOLIAGE_COLLIDABLE_ONLY=1: ship only foliage that COLLIDES.
 #
-# A dedicated server does not render. The only reason foliage exists there is
-# so vehicles hit trees, which means a mesh cooked NoCollision -- all the
-# grass, corn and wheat -- does nothing on a server but cost memory. That is
-# 1,524,740 of 3,478,884 instances, 44% of the total, for nothing.
+# A dedicated server does not render, so a mesh cooked NoCollision -- all the
+# grass, corn and wheat -- does nothing there but cost memory. That is
+# 1,524,740 of 3,478,884 instances, 44% of the total.
 #
-# It matters because a server has no streaming source until a player joins, so
-# the Landscape grid's loading range does not bound it the way it does on a
-# client: it loads every cell at once and sits on 17 GB, never finishing its
-# Steam session.
+# READ THIS BEFORE REACHING FOR IT ON A SERVER BUILD. It does NOT make a
+# foliage server start. What stops the server is 143 seconds of building one
+# physics body per COLLIDING instance on the game thread, which outlasts the
+# Steam game-server logon; the instances this flag drops have no physics bodies
+# at all, so it removes none of that. Measured, not assumed -- see SERVER.md
+# section 5. It saves memory and nothing else.
 #
 # Client builds must NEVER set this -- there the grass is the point.
 COLLIDABLE_ONLY = os.environ.get("MTMI_FOLIAGE_COLLIDABLE_ONLY", "") == "1"
