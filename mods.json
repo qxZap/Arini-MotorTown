@@ -193,7 +193,7 @@
         "MTMI_GAME_CONTENT": "${MTMI_REPO_ROOT}/vanilla_extract_server/MotorTown/Content",
         "MTMI_COOKED_CONTENT": "${MTMI_COOKED_CONTENT_SERVER}",
         "MTMI_SERVER_CVARS": "1",
-        "MTMI_NO_FOLIAGE": "1"
+        "MTMI_FOLIAGE_COLLIDABLE_ONLY": "1"
       },
       "_": "The DEDICATED SERVER build. Not a compat layer -- a second TARGET, with its own game install, vanilla extract and cook. The server ships its own cook of the same content: Jeju_World.uexp is 371 MB against the client's 290 MB, and its packages use VERSIONED property serialization where the client's are unversioned. MTMI_SKIP_DEALERS is the one remaining omission: those 24 actors are still reverse-engineered unversioned blobs the server cook cannot read. Everything else -- map, cells, 15,042 props, foliage, delivery points, economy -- must match the CLIENT exactly, or a client teleporting to the island waits forever for actors the server never sends. Deploy follows MT_GAME_DIR, so this lands in the SERVER's Paks folder. Server and client paks are NOT interchangeable -- ship both."
     }

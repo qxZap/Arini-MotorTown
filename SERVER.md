@@ -111,68 +111,82 @@ the client cook would produce a pak that looks right and cannot host.
 
 ---
 
-## 5. Why the server pak has no foliage
+## 5. Foliage, and why the server ships cells but not instances
 
-**The server never finishes creating its Steam session, and the reason is time,
-not memory.**
+Two separate problems live here. They were tangled together for a long time and
+they have different answers.
 
-A dedicated server has world-partition streaming **disabled** — that is UE's
-default for a server, and it is baked at cook time, not read from a cvar. So the
-server loads every cell at once, including all 27k foliage cells, and builds a
-physics body for every colliding instance on the game thread before it gets
-around to registering with Steam. That blocks the thread long enough that the
-Steam game-server logon times out, and MT never re-logs-on — it only retries
-`CreateSession`, which then fails forever against a dead logon.
+### 5a. The cells must exist on both sides, or clients drop
 
-Measured, same machine, same session:
+**A client and a server must register the same world-partition cells.** When a
+client streams a cell in and makes it visible, it tells the server so. A server
+that has never heard of that cell package has no good answer, and the client
+does not degrade gracefully -- it drops with *"Your connection to the host has
+been lost"*.
+
+Shipping no foliage at all left the server missing **2,511 of the client's
+2,565 cells**, and no player could stay on the island. Sessions lasted 1m47s,
+38s, 29s, 11s, 3s -- shrinking as the player's saved spawn point crept onto the
+island, which made it look like a teleport bug rather than a proximity one.
+
+So the server registers **every** foliage cell -- same names, same bounds, same
+components -- with **zero instances in them** (`MTMI_FOLIAGE_NO_INSTANCES=1`).
+Cell bounds are still computed from the real instance positions, so both sides
+describe the same piece of world. Cost measured: tick-start to `Creating
+Session` goes 15 s -> 23 s, peak RAM 6.79 -> 6.94 GB. Effectively free.
+
+The same class of bug bites in the other direction, and worse: an asset only the
+**server** has is one it can reference in something it replicates, and a client
+that cannot resolve it drops. Two of those shipped undetected -- the Vista GTR
+(`Cars/Models/Vista/V8C52`) and a bus mesh -- because
+`check_server_parity.py` only ever compared client-minus-server. It checks both
+directions now.
+
+### 5b. The instances are what keep a foliage server off Steam
+
+**The gate is time on the game thread, not memory.** Server-side world-partition
+streaming is disabled -- UE's default for a server, baked at cook time, not
+readable from a cvar -- so every cell loads at once and the server builds a
+Chaos body for every colliding instance before it registers with Steam. That
+blocks the thread past the Steam game-server logon timeout, and MT never
+re-logs-on: it only retries `CreateSession`, which then fails forever against a
+dead logon.
 
 | build | tick start -> `Creating Session` | create call | peak RAM | result |
 |---|---|---|---|---|
 | vanilla, no island | 15 s | 2 s | 6.79 GB | `Session created!` |
-| island, no foliage (x6) | 13-24 s | 1-2 s | ~7 GB | `Session created!` |
-| island, with foliage | 143 s | 135 s, then fails | 17.5 GB | `Failed to create session on Steam` |
+| island, no foliage at all | 13-24 s | 1-2 s | ~7 GB | lists, but clients drop (5a) |
+| island, empty foliage cells | 23 s | 1 s | 6.94 GB | `Session created!` |
+| island, all 3.49M instances | 143 s | 135 s, then fails | 17.5 GB | `Failed to create session on Steam` |
 
-The tell that this is a *dead logon* rather than ongoing work: once the failed
-server settles it sits at **0.9% of one core**, completely idle, and every
-30-second retry still fails. Nothing is stuck. Steam is simply gone.
+The tell that this is a *dead logon* rather than ongoing work: the failed server
+then sits at **0.9% of one core**, completely idle, and every 30-second retry
+still fails. Nothing is stuck. Steam is simply gone.
 
-The cost is **1,969,202 colliding instances** — trees and bushes, one Chaos body
-each. Everything else is noise.
+The cost is **1,969,202 colliding instances** -- trees and bushes, one body
+each. The other 1,524,740 (grass, corn, wheat) are cooked `NoCollision` and have
+no bodies at all.
 
-### Things that do NOT fix it. Do not retry these blind.
+### Things that do NOT fix it
 
-- **Dropping the collision-free meshes** (grass, corn, wheat — 1,524,740
-  instances, 44% of the total; `MTMI_FOLIAGE_COLLIDABLE_ONLY=1`). Those
-  instances have **no physics bodies at all**, so removing them removes none of
-  the startup cost. An earlier note here recorded "memory barely moved" and drew
-  the wrong conclusion: memory was never the gate.
 - **`wp.Runtime.EnableServerStreaming=1`** (and `...Out`, and
   `UpdateStreamingStateTimeLimit`), whether set in
   `Saved/Config/WindowsServer/Engine.ini` under `[SystemSettings]` or passed as
   `-dpcvars=`. Measured against vanilla with no island pak: **6792 MB with it
   off, 6764 MB with it on.** A flat line. UE resolves server streaming into
-  `bIsServerStreamingEnabled` **during the cook** and MT cooked it off, so no
-  runtime cvar can reach it. The name does not even appear in `Jeju_World.umap`.
+  `bIsServerStreamingEnabled` during the cook and MT cooked it off -- the name
+  does not even appear in `Jeju_World.umap`.
 - **Lowering the Landscape grid loading range.** Loading ranges are never
   consulted when streaming is off.
 - **Waiting.** RAM is flat for 12+ minutes and the retries never succeed.
 
-### What is actually left to try
+### What this costs
 
-Patch `bIsServerStreamingEnabled` into the WorldPartition export of the server's
-`Jeju_World.umap`. This toolchain can write versioned properties now (section
-6), so it is reachable — but it flips a global engine behaviour that MT's own
-server has never run with, on the *vanilla* world rather than our content. Treat
-it as an experiment on a server nobody is playing on.
-
-Foliage instances live inside `FoliageInstancedStaticMeshComponent`s — they are
-component instance data, not individually replicated actors — so leaving them
-out does **not** break client/server sync. Clients carry foliage in their own
-pak and both see and collide with it. Confirmed in play.
-
-**What it costs:** winches do not attach to trees on the island, because the
-server has no body to trace against. Buildings, props and terrain are all
-shipped server-side and winch normally.
+Winches do not attach to trees -- there is no body to trace against. Ground,
+buildings and props all winch normally. Whether tree collision can be afforded
+inside the Steam deadline is a question of how many bodies fit in the budget
+between 23 s and 143 s; `MTMI_FOLIAGE_COLLIDABLE_ONLY=1` ships the 1.97M
+colliding instances and nothing else, and is the next thing to measure.
 
 ---
 

@@ -80,6 +80,25 @@ CELL_PAD = float(os.environ.get("MTMI_FOLIAGE_CELL_PAD", "25600"))
 # Client builds must NEVER set this -- there the grass is the point.
 COLLIDABLE_ONLY = os.environ.get("MTMI_FOLIAGE_COLLIDABLE_ONLY", "") == "1"
 
+# MTMI_FOLIAGE_NO_INSTANCES=1: register every foliage cell, place nothing in it.
+#
+# For the DEDICATED SERVER. A client and a server must agree on which world
+# partition cells exist: the client streams a cell in, makes it visible and
+# tells the server so, and a server that has never heard of that package has
+# no good answer. Shipping no foliage at all (MTMI_NO_FOLIAGE) leaves the
+# server missing 2,511 of the client's 2,565 cells, which is the largest
+# client/server disagreement this build has.
+#
+# So the cells ship -- same names, same bounds, same components, same mesh
+# references -- with zero instances in them. There is nothing to render on a
+# server and nothing to collide with, so the instances were only ever cost:
+# one Chaos body per colliding instance is what keeps a foliage server off
+# Steam entirely (SERVER.md section 5). Empty cells have none of them.
+#
+# Bounds still come from the REAL instance positions, so the cell a client
+# streams and the cell the server holds describe the same piece of world.
+NO_INSTANCES = os.environ.get("MTMI_FOLIAGE_NO_INSTANCES", "") == "1"
+
 # What the Landscape grid ships with when MTMI_LANDSCAPE_LOADING_RANGE is
 # unset. Foliage cells live on that grid, so this -- not MainGrid's 25600 --
 # is the distance a cell stays resident to.
@@ -424,18 +443,31 @@ def main() -> int:
     # no scene re-export, and nothing quietly reverting your edit.
     mesh_collision.update(read_shipped_collision(mesh_paths, im))
 
-    # SERVER builds: drop foliage that cannot collide. It renders on nobody
-    # and blocks nothing, so on a dedicated server it is pure memory.
+    empty_meshes: set[str] = set()
+
+    # SERVER builds: ship no INSTANCES for foliage that cannot collide. It
+    # renders on nobody and blocks nothing, so on a dedicated server a
+    # NoCollision instance is pure cost.
+    #
+    # The meshes stay in `groups`, emptied rather than removed. Removing them
+    # deleted every tile that held nothing but grass -- 2,565 cells became
+    # 2,407 -- and a cell the client has and the server does not is what drops
+    # players off the island (section 5a of SERVER.md). The cell must exist
+    # even when there is nothing left to put in it.
     if COLLIDABLE_ONLY:
         drop = {k for k, v in mesh_collision.items() if v == "NoCollision"}
         if drop:
             before_i = sum(len(v) for v in groups.values())
-            groups = {k: v for k, v in groups.items() if k[1] not in drop}
-            after_i = sum(len(v) for v in groups.values())
-            mesh_paths = {k: v for k, v in mesh_paths.items() if k not in drop}
-            print(f"  collidable-only: dropped {len(drop)} mesh(es), "
+            # NOT removed from `groups`: cell bounds are computed from real
+            # instance positions further down, and a tile whose every mesh was
+            # emptied here would have none left to compute them from. The set
+            # is applied at write time instead.
+            empty_meshes.update(drop)
+            after_i = sum(len(v) for k, v in groups.items() if k[1] not in drop)
+            print(f"  collidable-only: emptied {len(drop)} mesh(es), "
                   f"{before_i - after_i:,} of {before_i:,} instance(s) "
-                  f"({(before_i - after_i) / max(before_i, 1) * 100:.0f}%)")
+                  f"({(before_i - after_i) / max(before_i, 1) * 100:.0f}%) "
+                  f"-- cells kept")
             for d in sorted(drop):
                 print(f"    - {d.rsplit('/', 1)[-1]}")
 
@@ -553,7 +585,11 @@ def main() -> int:
     for old in scratch.glob("*.jsonl"):
         old.unlink()
 
-    def write_jsonl(path: Path, inst: list) -> None:
+    def write_jsonl(path: Path, inst: list, mesh: str = "") -> None:
+        # Cell registration, bounds and components are built from the full
+        # instance set above; only what lands IN the cell is dropped here.
+        if NO_INSTANCES or mesh in empty_meshes:
+            inst = []
         with open(path, "w", encoding="utf-8") as fh:
             for r in inst:
                 fh.write('{"X":%r,"Y":%r,"Z":%r,"Pitch":%r,"Yaw":%r,"Roll":%r,'
@@ -608,7 +644,7 @@ def main() -> int:
 
         (mesh0, inst0), rest = meshes[0], meshes[1:]
         jl0 = scratch / f"{name}.jsonl"
-        write_jsonl(jl0, inst0)
+        write_jsonl(jl0, inst0, mesh0)
         job = {
             "cell": str(gen_dir / f"{name}.umap"),
             "tx": str(tile[0]), "ty": str(tile[1]), "tz": str(tile[2]),
@@ -620,7 +656,7 @@ def main() -> int:
         extra = []
         for k, (mesh, inst) in enumerate(rest):
             jlk = scratch / f"{name}_{k + 1}.jsonl"
-            write_jsonl(jlk, inst)
+            write_jsonl(jlk, inst, mesh)
             ex = {"mesh": mesh_paths.get(mesh, ""), "instances": str(jlk)}
             ex.update(comp_settings(mesh))
             extra.append(ex)

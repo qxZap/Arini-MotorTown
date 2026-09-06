@@ -107,6 +107,19 @@ def main() -> int:
             f"e.g. {', '.join(sorted(gone)[:4])}")
     else:
         ok("server ships every non-visual asset the client does")
+    # The other direction, which matters MORE. An asset the client is missing
+    # is usually cosmetic; an asset only the SERVER has is one the server can
+    # reference in something it replicates, and a client that cannot resolve it
+    # does not degrade -- it drops with "Your connection to the host has been
+    # lost". That is how a stale repack shipped the Vista GTR to the server and
+    # not to players: this file compared c_all - s_all and never looked back.
+    if surplus := s_all - c_all:
+        bad(f"server ships {len(surplus)} asset(s) the client does not: "
+            f"{', '.join(sorted(surplus)[:4])} -- clients drop on anything the "
+            f"server replicates that references these")
+    else:
+        ok("server ships nothing the client is missing")
+
     if not quiet:
         visual = {p for p in c_all - s_all if any(v in p for v in VISUAL_ONLY)}
         if visual:
