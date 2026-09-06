@@ -80,6 +80,9 @@ _ubulk_backup/
 # the pipeline doesn't depend on any external extraction tool, but it's
 # ~hundreds of MB of game files, never commit it.
 vanilla_extract/
+# 7.5 GB of the DEDICATED SERVER pak, extracted. Same reason as the client
+# one: it is regenerable with bootstrap_extract.py and is not ours.
+vanilla_extract_server/
 
 
 # Foliage-probe scratch dumps (raw Extras blobs, roundtrip cell writes).
