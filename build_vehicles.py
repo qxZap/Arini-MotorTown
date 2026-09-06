@@ -254,8 +254,17 @@ def main() -> int:
     if not CONFIG.exists():
         print("  vehicles.json absent — no custom vehicles"); return 0
     cfg = json.loads(CONFIG.read_text(encoding="utf-8"))
+    # "skip": true leaves an entry declared but unbuilt -- no cloned class, no
+    # table row, and import_meshes drops its Spawn_ placeholder too, because
+    # the spawner resolves a mod-declared vehicle THROUGH this file. Keeping
+    # the entry rather than deleting it preserves the tuning next to the
+    # decision to shelve it.
     entries = [v for v in (cfg.get("vehicles") or [])
-               if isinstance(v, dict) and v.get("base") and v.get("new_id")]
+               if isinstance(v, dict) and v.get("base") and v.get("new_id")
+               and not v.get("skip")]
+    if skipped := [v["new_id"] for v in (cfg.get("vehicles") or [])
+                   if isinstance(v, dict) and v.get("skip") and v.get("new_id")]:
+        print(f"  skipped (skip=true): {', '.join(skipped)}")
     mods = [v for v in (cfg.get("modify") or [])
             if isinstance(v, dict) and v.get("row")]
     if not entries and not mods:

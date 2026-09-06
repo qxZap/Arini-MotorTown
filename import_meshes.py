@@ -380,6 +380,17 @@ def resolve_vehicle_path_by_key(veh_key):
         for _v in (_cfg.get("vehicles") or []):
             if _v.get("new_id") != veh_key:
                 continue
+            # skip=true: the vehicle is not built, so its placeholder must not
+            # become a spawner either -- it would reference a class that never
+            # ships. Return outright rather than falling through: the table
+            # lookup below reads INSTALLED paks, and a previous build of ours
+            # still carries the row, so it would happily resolve the vehicle
+            # we just decided not to ship.
+            if _v.get("skip"):
+                print(f"  spawner: '{veh_key}' is skip=true in vehicles.json "
+                      f"-- placeholder dropped")
+                _VEHICLE_PATH_CACHE[veh_key] = None
+                return None
             from unlock_vehicles import vehicle_class_by_row as _byrow
             _base = _byrow().get(_v.get("base", ""))
             if _base:

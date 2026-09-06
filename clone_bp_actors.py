@@ -383,9 +383,15 @@ def prepare_mod_bp_class(tpl: dict) -> bool:
                 "--recipes",    recipes_path,
             ], capture_output=True, text=True)
         finally:
-            try: os.unlink(recipes_path)
-            except OSError: pass
+            # Keep the recipes file when the mutation FAILED: it is the only
+            # copy of what was actually sent, and the failure mode is a
+            # serializer NRE that says nothing about which recipe caused it.
+            try:
+                if r.returncode == 0:
+                    os.unlink(recipes_path)
+            except (OSError, NameError, UnboundLocalError): pass
         if r.returncode != 0:
+            print(f"    recipes kept for inspection: {recipes_path}", file=sys.stderr)
             print(r.stdout); print(r.stderr, file=sys.stderr); return False
         for line in r.stdout.splitlines():
             if line.strip(): print(f"    {line}")

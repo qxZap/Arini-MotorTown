@@ -54,6 +54,16 @@ def main() -> int:
 
     # _cfg, not os.environ: a standalone repack must honour .env the same
     # way build.bat does, or the setting silently does nothing.
+    # Applying this re-opens and REWRITES the whole map. On the client that is
+    # seconds. On the dedicated-server map it is 24 GB of RAM and 25+ minutes,
+    # because a VERSIONED package materialises every one of its ~77k exports
+    # instead of leaving unknown classes as raw bytes. Not worth paying per
+    # build for one float, so the server layer sets MTMI_SKIP_GRID_RANGE=1.
+    # (An empty MTMI_LANDSCAPE_LOADING_RANGE would NOT do it: _cfg falls back
+    # to .env, which still has a value.)
+    if (_cfg("MTMI_SKIP_GRID_RANGE", "") or "").strip() == "1":
+        print("  grid range skipped (MTMI_SKIP_GRID_RANGE=1)")
+        return 0
     raw = (_cfg(ENV, "") or "").strip()
     if not raw:
         return 0                      # not set: the grid keeps vanilla 409600

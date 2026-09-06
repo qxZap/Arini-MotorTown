@@ -97,6 +97,12 @@ def wants(entry, layer_key: str | None = None) -> bool:
     return set(need) <= visible_mods(layer_key)
 
 
+# ${NAME} inside a layer's env block. Kept at module scope: a backslash is
+# not allowed inside an f-string expression, and the pattern reads better here
+# than escaped into the call.
+_ENV_REF = r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"
+
+
 def main() -> int:
     mods, layers = load()
     have = installed(mods)
@@ -114,7 +120,35 @@ def main() -> int:
         # --mod-name prints the pak identity and --delta whether this layer
         # ships only patched data, so build.bat can ask for any of the three
         # without parsing.
-        if "--pak-prefix" in sys.argv:
+        if "--env" in sys.argv:
+            # A layer's own environment, as KEY=VALUE lines for `for /f` in
+            # build.bat. This exists for the SERVER layer: a dedicated-server
+            # pak is not a different pak name over the same inputs, it is a
+            # different build target -- its own game install, its own vanilla
+            # extract and its own cook. Empty for every client layer.
+            # ${NAME} expands from .env (or the process env), so machine paths
+            # stay in .env where the rest of them live and mods.json stays
+            # committable. An unset ${NAME} is fatal rather than silently
+            # empty: a server build that quietly fell back to the CLIENT cook
+            # would produce a pak that looks right and cannot host.
+            import re as _re
+            import mt_paths as _mtp
+            for k, v in (layers[key].get("env") or {}).items():
+                def _sub(m):
+                    # .env first, then whatever mt_paths already resolved --
+                    # MTMI_REPO_ROOT and friends have computed defaults and are
+                    # normally absent from .env entirely.
+                    got = _mtp._cfg(m.group(1), "") or str(
+                        getattr(_mtp, m.group(1).replace("MTMI_", ""), "")
+                        or getattr(_mtp, m.group(1), ""))
+                    if not got:
+                        raise SystemExit(
+                            f"  layer '{key}' needs {m.group(1)} set in .env "
+                            f"(for {k})")
+                    return got
+                expanded = _re.sub(_ENV_REF, _sub, str(v))
+                print(f"{k}={expanded}")
+        elif "--pak-prefix" in sys.argv:
             print(layers[key].get("pak_prefix", "zzzz_"))
         elif "--delta" in sys.argv:
             print("1" if layers[key].get("delta") else "0")

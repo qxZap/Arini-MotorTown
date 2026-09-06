@@ -141,10 +141,28 @@ def _cfg(name: str) -> str:
 # ---------------------------------------------------------------------------
 # Game-pak fingerprint + extraction state (delta caching)
 # ---------------------------------------------------------------------------
+# The base pak, by install kind. WindowsServer is the DEDICATED SERVER build
+# and it is a genuinely different cook, not a subset: its Jeju_World.uexp is
+# 371 MB against the client's 290 MB, and it ships 11,476 world-partition
+# cells to the client's 11,771. A client-cooked map dropped on a server loads
+# far enough to log "World loading completed" and then never creates its Steam
+# session, so the server never appears in any listing. Building a server pak
+# means extracting THIS pak as the vanilla baseline.
+#
+# Order matters only in that a directory holds exactly one of these.
+_BASE_PAK_NAMES = (
+    "MotorTown-Windows.pak",        # client
+    "MotorTown-WindowsServer.pak",  # dedicated server
+    "MotorTown.pak",                # older/unsuffixed layout
+)
+
+
 def _find_pak() -> Path | None:
-    a = MT_GAME_DIR / "MotorTown" / "Content" / "Paks" / "MotorTown-Windows.pak"
-    b = MT_GAME_DIR / "MotorTown" / "Content" / "Paks" / "MotorTown.pak"
-    return a if a.is_file() else b if b.is_file() else None
+    paks = MT_GAME_DIR / "MotorTown" / "Content" / "Paks"
+    for n in _BASE_PAK_NAMES:
+        if (paks / n).is_file():
+            return paks / n
+    return None
 
 
 def pak_fingerprint(pak: Path | None = None) -> str:
@@ -264,9 +282,7 @@ def _do_fmodel(src_root: Path, bundles: list[str]) -> int:
 # repak mode: extract straight from the encrypted game pak with the AES key
 # ---------------------------------------------------------------------------
 def _do_repak(aes_key: str, bundles: list[str]) -> int:
-    pak_a = MT_GAME_DIR / "MotorTown" / "Content" / "Paks" / "MotorTown-Windows.pak"
-    pak_b = MT_GAME_DIR / "MotorTown" / "Content" / "Paks" / "MotorTown.pak"
-    pak = pak_a if pak_a.is_file() else pak_b if pak_b.is_file() else None
+    pak = _find_pak()
     if pak is None:
         sys.stderr.write(f"[bootstrap] no MotorTown.pak found under {MT_GAME_DIR}\n")
         return 2
@@ -298,9 +314,7 @@ def _do_full(aes_key: str) -> int:
     read (clone source actors, transitive references, future features)
     always finds its file locally. Idempotent via the pak fingerprint:
     skips when 'full' is already current for this pak."""
-    pak_a = MT_GAME_DIR / "MotorTown" / "Content" / "Paks" / "MotorTown-Windows.pak"
-    pak_b = MT_GAME_DIR / "MotorTown" / "Content" / "Paks" / "MotorTown.pak"
-    pak = pak_a if pak_a.is_file() else pak_b if pak_b.is_file() else None
+    pak = _find_pak()
     if pak is None:
         sys.stderr.write(f"[bootstrap] no MotorTown.pak found under {MT_GAME_DIR}\n")
         return 2

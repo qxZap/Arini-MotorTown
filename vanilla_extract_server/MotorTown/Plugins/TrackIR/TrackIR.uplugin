@@ -1,0 +1,24 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "TrackIR",
+	"Description": "",
+	"Category": "Other",
+	"CreatedBy": "MrHwang (Hwang Chan Kyoung)",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "TrackIR",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	]
+}

@@ -330,6 +330,21 @@ if defined MTMI_LAYER (
     rem ZZZZMTNet_P, which no zzzz_ name can. DEPLOYED below and every
     rem "is this our own output" check read it from the environment.
     for /f "usebackq delims=" %%i in (`python mods.py --layer %MTMI_LAYER% --pak-prefix`) do set "MTMI_PAK_PREFIX=%%i"
+
+    rem A layer may also carry its own ENVIRONMENT. That is how the dedicated-
+    rem server target works: it is not a different pak name over the same
+    rem inputs, it is a different game install, vanilla extract and cook. Empty
+    rem for every client layer, so this is a no-op for them.
+    for /f "usebackq tokens=1,* delims==" %%A in (`python mods.py --layer %MTMI_LAYER% --env`) do set "%%A=%%B"
+
+    rem MTMI_GAME_CONTENT is defaulted near the top and VANILLA_MAP derived
+    rem from it long before --layer is even parsed, so a layer that supplies
+    rem its own game content must re-derive anything downstream of it. The
+    rem dedicated-server layer does exactly that, and without this the server
+    rem build silently read the CLIENT map -- producing a client-cooked,
+    rem unversioned map with the right filename and the wrong contents.
+    set "VANILLA_MAP=!MTMI_GAME_CONTENT!\Maps\Jeju\Jeju_World.umap"
+    echo   layer game content: !MTMI_GAME_CONTENT!
     if errorlevel 1 (
         echo   layer "%MTMI_LAYER%" could not be resolved -- see mods.json
         exit /b 1

@@ -21,6 +21,35 @@ internal static class Program
     {
         if (args.Length == 0) { PrintHelp(); return 1; }
 
+        // The dedicated-server cook is VERSIONED where the client cook is
+        // unversioned, and the two need opposite treatment:
+        //
+        //   Assets we BUILD (a Mod* delivery-point class, a cargo table) are
+        //   made of properties this tool constructs, and a constructed
+        //   property has no PropertyTypeName -- which a versioned write
+        //   requires and dies without. Those must be written UNVERSIONED.
+        //   PKG_UnversionedProperties is per-package, so that is legal inside
+        //   an otherwise-versioned pak.
+        //
+        //   Assets we EDIT (cells, the map) are mostly properties READ from
+        //   the source, which already carry their type names. Those must keep
+        //   the source's format: an unversioned write resolves every class
+        //   through the .usmap, and Blueprint classes like Ship_01_C are not
+        //   in it -- "Failed to find a valid schema for parent name".
+        //
+        // Hence per-command, not global.
+        if (Environment.GetEnvironmentVariable("MTMI_FORCE_UNVERSIONED") == "1")
+        {
+            UAsset.ForceUnversionedOnWrite = args[0] switch
+            {
+                "mutate-bp-cdo" or "mutate-cargos" or "set-row-slots"
+                    or "clone-vehicle-row" or "make-material-instance"
+                    or "set-material-physmat" or "rename-package"
+                    or "set-props" or "unlock-vehicles" => true,
+                _ => false,
+            };
+        }
+
         try
         {
             return args[0] switch
@@ -5593,7 +5622,18 @@ internal static class Program
                         UAssetAPI.PropertyTypes.Objects.UInt32PropertyData u32 => $" = {u32.Value}",
                         _ => ""
                     };
-                    Console.WriteLine($"    prop: {p.Name} ({p.GetType().Name}){valStr}");
+                    // PropertyTypeName is what a VERSIONED package writes
+                    // inline for every property. The client cook is
+                    // unversioned and has none; the dedicated-server cook has
+                    // one on every property, and anything WE construct must
+                    // carry a matching one or the writer throws. Printing the
+                    // real shapes is how those get derived correctly rather
+                    // than guessed.
+                    string tn = "";
+                    if (p.PropertyTypeName?.Nodes is { Count: > 0 } tns)
+                        tn = "  typename=[" + string.Join(" ",
+                            tns.Select(n => $"{n.Name}:{n.InnerCount}")) + "]";
+                    Console.WriteLine($"    prop: {p.Name} ({p.GetType().Name}){valStr}{tn}");
                 }
             }
             if (e is RawExport re)

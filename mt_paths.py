@@ -181,12 +181,18 @@ if not MT_GAME_DIR_RAW:
     ))
 else:
     p = Path(MT_GAME_DIR_RAW)
-    pak_a = p / "MotorTown/Content/Paks/MotorTown.pak"
-    pak_b = p / "MotorTown/Content/Paks/MotorTown-Windows.pak"
-    if not (pak_a.is_file() or pak_b.is_file()):
+    # WindowsServer is the DEDICATED SERVER install. It is a legitimate target:
+    # its cook is a different build of the same content (Jeju_World.uexp 371 MB
+    # against the client's 290 MB), and a client pak dropped on a server never
+    # creates its Steam session. Building a server pak means pointing
+    # MT_GAME_DIR at that install, so this must accept it.
+    _base_paks = ("MotorTown.pak", "MotorTown-Windows.pak",
+                  "MotorTown-WindowsServer.pak")
+    if not any((p / "MotorTown/Content/Paks" / n).is_file() for n in _base_paks):
         _missing.append((
             "MT_GAME_DIR",
-            f"path '{MT_GAME_DIR_RAW}' exists but doesn't contain MotorTown/Content/Paks/MotorTown.pak (or MotorTown-Windows.pak)",
+            f"path '{MT_GAME_DIR_RAW}' exists but doesn't contain "
+            f"MotorTown/Content/Paks/{{{', '.join(_base_paks)}}}",
             "Should be the folder Steam shows when you Browse local files — one level above the MotorTown subfolder.",
         ))
 

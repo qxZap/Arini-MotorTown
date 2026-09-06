@@ -23,6 +23,17 @@ def env_for(layer: str) -> dict[str, str]:
     skip = list(l.get("skip") or []) + [k for k, m in mods.items() if m.get("always_skip")]
     e["MTMI_EXCLUDE_PAKS"] = ",".join(
         p for k in skip for p in (mods.get(k) or {}).get("match") or [])
+    # A layer's own environment -- the dedicated-server target points at a
+    # different game install, vanilla extract and cook. Empty for client layers.
+    import subprocess as _sp
+    r = _sp.run([sys.executable, "mods.py", "--layer", layer, "--env"],
+                capture_output=True, text=True)
+    if r.returncode:
+        raise SystemExit(r.stderr.strip() or f"  layer '{layer}' env unresolved")
+    for line in r.stdout.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            e[k.strip()] = v.strip()
     return e
 
 

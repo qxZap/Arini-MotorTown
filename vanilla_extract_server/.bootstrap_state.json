@@ -1,0 +1,11 @@
+{
+  "pak_fingerprint": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4",
+  "bundles": {
+    "full": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4",
+    "cargos": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4",
+    "delivery_cdos": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4",
+    "map_persistent": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4",
+    "map_cells": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4",
+    "map_cells_all": "sha1:7381d1da4d42f701c3b36747b4ace76e531884f4"
+  }
+}
