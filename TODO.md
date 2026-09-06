@@ -642,6 +642,50 @@ LoadingRange is the number that will move.
 
 ---
 
+## 14. DEDICATED SERVER — WORKING 6 Sep
+
+The island runs on a Motor Town dedicated server: listed, joinable, and the
+island itself playable with its delivery points and economy. Confirmed in play.
+
+Full write-up in **SERVER.md** — prerequisites, the WindowsServer cook, the
+environment variables, the known gaps and the failure signatures. Read that
+before touching any of it.
+
+The short version of what made it hard: the game cooks its content TWICE and
+the two are not interchangeable. The client pak is UNVERSIONED (property names
+resolved by index through the .usmap) and the dedicated-server pak is
+VERSIONED (every property carries its name and type inline). This whole
+toolchain was built against the unversioned form.
+
+None of it fails loudly. A server given a bad pak loads, ticks, and then never
+creates its Steam session — it stays up forever and appears in no listing. A
+client arriving where the server is missing actors does not error either; it
+hangs, or drops with "Your connection to the host has been lost".
+
+The one that cost the most: step 3 placed all 34 delivery points, step 5 wrote
+the level back through UAssetAPI's typed LevelExport path, and they were gone.
+That path only ever ran on the server — on the client the PersistentLevel does
+not parse as a LevelExport, so it takes a raw byte patch that preserves
+everything. Both targets use the raw path now.
+
+**Guard against the next one:** `check_server_parity.py` compares the server
+build against the client — same cells, same delivery-point classes, and that
+the map actually PLACES the same number of delivery points on both. Sets, not
+bytes: the two are separate cooks, so every shared asset legitimately differs.
+
+**Still open**
+- Foliage is client-side only. A server with nobody connected has no streaming
+  source, so it loads every foliage cell at once — 17 GB, and it never finishes
+  starting. Not a sync problem: foliage is component instance data, not
+  replicated actors.
+- The 24 dealer spawn points are still unversioned blobs the server cannot
+  read. Needs a real MTDealerVehicleSpawnPoint to model and there is none in
+  any cell.
+- The economy compats shipped to a server are CLIENT builds. They work, but a
+  `*_server` compat layer would be correct.
+
+---
+
 ## 10. HOW THIS PROJECT GOES WRONG
 
 Three separate multi-day hunts ended the same way, so it is worth naming.
@@ -687,3 +731,17 @@ took five minutes and was available before the theory.
 **Never re-export while a build is running.** Foliage injection reads the
 shards partway through, so an export landing mid-build silently mixes two
 scenes into one map. Nothing errors.
+
+**Check what a variable already means before reusing the name.** The server
+layer needed "no foliage at all" and MTMI_SKIP_FOLIAGE looked right. It is set
+to 1 on EVERY build and means "drop fol_* from the mesh stage", because foliage
+ships as cells instead. Gating the cell step on it would have switched foliage
+off for the client too — the exact failure this file already records. Caught
+before a client build ran with it, by reading build.bat rather than trusting
+the name.
+
+**A test that cannot fail is not a passing test.** Two "server FAILS" results
+during the dedicated-server hunt were a PowerShell launch from bash with bad
+quoting on -WorkingDirectory: the server never started, and the harness dutifully
+reported the failure it was looking for. Always confirm the thing under test
+actually ran.

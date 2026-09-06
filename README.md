@@ -11,6 +11,11 @@ payment overrides for offroad-friendly economy tweaks.
 
 ---
 
+
+> **Running a dedicated server?** See [SERVER.md](SERVER.md). A server needs a
+> DIFFERENT build of the island -- the game cooks its content twice and the two
+> paks are not interchangeable. `build.bat --layer server`.
+
 ## What this does
 
 - **Inject delivery points** described in `delivery_points.json` into Motor

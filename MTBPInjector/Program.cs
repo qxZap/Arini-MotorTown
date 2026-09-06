@@ -7070,26 +7070,24 @@ internal static class Program
 
         if (newActorNums.Count > 0)
         {
-            // Add actors the TYPED way (lvl.Actors.Add) — a no-op UAssetAPI
-            // round-trip of this map loads in-game, so UAssetAPI's typed
-            // LevelExport write is faithful here; reuse it. Converting the
-            // level to a raw binary-patched export (PatchLevelExportAsRaw)
-            // crashed world load, so it's only the fallback for a non-typed
-            // level. Each actor also goes into the level's CBSD preload arcs.
-            if (asset.Exports[levelIdx] is LevelExport lvlExp)
-            {
-                Console.WriteLine($"Adding {newActorNums.Count} actors to typed LevelExport.Actors ...");
-                foreach (var n in newActorNums)
-                {
-                    lvlExp.Actors.Add(new FPackageIndex(n));
-                    lvlExp.CreateBeforeSerializationDependencies.Add(new FPackageIndex(n));
-                }
-            }
-            else
-            {
-                Console.WriteLine($"Patching PersistentLevel actor list (+{newActorNums.Count}, raw fallback) ...");
-                PatchLevelExportAsRaw(asset, mainPath, newActorNums);
-            }
+            // ALWAYS the raw byte patch.
+            //
+            // The typed path (lvl.Actors.Add, then let UAssetAPI serialize the
+            // LevelExport) only ever ran on the dedicated server, because on
+            // the CLIENT the PersistentLevel does not parse as a LevelExport
+            // at all -- UAssetAPI's LevelExport support is incomplete for UE5.5
+            // world partition, so it stays raw and the byte patch below is what
+            // has always shipped.
+            //
+            // On the server map it DOES parse, took the typed path, and the
+            // write was not faithful: all 34 delivery-point actors that step 3
+            // had just placed were gone from the output. The island had no
+            // delivery points on a dedicated server, and a client teleporting
+            // in waited forever for actors the server would never send.
+            //
+            // So the two targets now go through the same proven path.
+            Console.WriteLine($"Patching PersistentLevel actor list (+{newActorNums.Count}) ...");
+            PatchLevelExportAsRaw(asset, mainPath, newActorNums);
         }
 
         // Volumetric fog reach. The froxel grid the fog is integrated in only

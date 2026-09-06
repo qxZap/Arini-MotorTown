@@ -8,9 +8,13 @@ folders rather than two zips: same decision, one download.
 from __future__ import annotations
 import shutil, zipfile
 from pathlib import Path
-from mt_paths import GAME_PAKDIR
+from mt_paths import GAME_PAKDIR, _cfg
 
 OUT = Path.home() / "Downloads" / "Arini"
+
+# The server pak is deployed into the DEDICATED SERVER install, not the game's,
+# because the two are separate targets with separate Paks folders.
+SERVER_PAKDIR = (Path(_cfg("MT_SERVER_DIR", "") or "") / "MotorTown" / "Content" / "Paks")
 BASE = "zzzz_Arini_P.pak"
 
 INSTALL = """HOW TO INSTALL
@@ -77,6 +81,48 @@ Cargo. Use this INSTEAD of the two single-mod patches, not alongside them.
 Install ONE folder's pak, never both.""",
          folders={"Default": ["zzzz_Arini_zProxyCapEcon_P.pak"],
                   "MTNet":   ["zzzzz_Arini_ProxyCapEconMTNet_P.pak"]}),
+
+    dict(zip_name="Arini_DedicatedServer.zip",
+         title="Arini - dedicated server",
+         from_server=True,
+         body="""FOR SERVER OWNERS ONLY. This is NOT the pak players install.
+
+A dedicated server and a game client need DIFFERENT builds of the island -- the
+game cooks its content twice and the two are not interchangeable. Putting the
+player pak on a server produces a server that starts, never appears in any
+listing, and never tells you why.
+
+  server  ->  this zip, into the dedicated server install
+  players ->  Arini.zip, as normal
+
+Everyone connecting still needs the player pak. Install it as usual.
+
+INSTALL
+  1. Copy zzzz_Arini_Server_P.pak into:
+       ...\Motor Town Behind The Wheel - Dedicated Server\MotorTown\Content\Paks
+  2. Start the server as you normally do.
+  3. In MotorTown\Saved\ServerLog\<timestamp>.log you want to see:
+       Session created!
+       [Session] URL: steam.<id>:7777
+     If the log stops at "Game Tick Started" the server is up but will never
+     list -- that is the symptom of a wrong pak, not a crash.
+
+WITH ECONOMY MODS
+  Install the mods, then the compat, in filename order (last one wins):
+       X_qxZap_CapitalistEconomy*.pak      the mod
+       zzProxysOversizeCargoV4-*.pak       the mod
+       zzzz_Arini_Server_P.pak             the island
+       zzzz_Arini_zProxyCapEcon_P.pak      the compat, from its own download
+  Use the NON-MTNet compat on a server.
+
+WHAT THIS BUILD LEAVES OUT, DELIBERATELY
+  Foliage. A server with nobody connected has no streaming source, so it would
+  load every foliage cell at once -- about 17 GB -- and never finish starting.
+  Foliage is not replicated, so it costs you nothing: players carry it in their
+  own pak and both see and drive into it.
+
+  The 24 vehicle dealership spawn points. Vanilla dealerships are unaffected.""",
+         folders={None: ["zzzz_Arini_Server_P.pak"]}),
 ]
 
 
@@ -94,7 +140,8 @@ def main() -> int:
             zf.writestr("README.txt", readme(r))
             for folder, paks in r["folders"].items():
                 for pak in paks:
-                    src = Path(GAME_PAKDIR) / pak
+                    root = SERVER_PAKDIR if r.get("from_server") else Path(GAME_PAKDIR)
+                    src = root / pak
                     if not src.is_file():
                         print(f"  MISSING {pak}"); return 1
                     zf.write(src, f"{folder}/{pak}" if folder else pak)
