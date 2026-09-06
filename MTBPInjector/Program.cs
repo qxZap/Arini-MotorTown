@@ -93,6 +93,7 @@ internal static class Program
                 "dump-table" => DumpTable(args.Skip(1).ToArray()),
                 "set-worldmap" => SetWorldMap(args.Skip(1).ToArray()),
                 "set-loading-range" => SetLoadingRangeCmd(args.Skip(1).ToArray()),
+                "set-server-streaming" => SetServerStreamingCmd(args.Skip(1).ToArray()),
                 "verify-typenames" => VerifyTypeNames(args.Skip(1).ToArray()),
                 "clone-vehicle-row" => CloneVehicleRow(args.Skip(1).ToArray()),
                 "vehicle-awd" => VehicleAllWheelDrive(args.Skip(1).ToArray()),
@@ -3387,6 +3388,74 @@ internal static class Program
             Console.WriteLine($"      derived={kv.Value}");
         }
         return bad == 0 ? 0 : 1;
+    }
+
+    // Turn WORLD PARTITION SERVER STREAMING on, in the map itself.
+    //
+    // A dedicated server loads every cell at once, which is what makes foliage
+    // unaffordable: one Chaos body per colliding instance, 117+ seconds on the
+    // game thread, and the Steam game-server logon expires before the server
+    // ever registers (SERVER.md section 5b). With streaming on, the server
+    // holds only the cells near a player, so the bodies arrive a few thousand
+    // at a time instead of two million at once.
+    //
+    // UWorldPartition::ServerStreamingMode defaults to ProjectDefault, which
+    // is supposed to defer to wp.Runtime.EnableServerStreaming. On this build
+    // it does not: that cvar measured a flat line whether set through
+    // [SystemSettings] or -dpcvars, with and without the island pak. Writing
+    // the enum onto the object leaves nothing to defer to.
+    //
+    // The property is absent from the vanilla map (it is at its default), so
+    // this ADDS it. Versioned packages need a PropertyTypeName on every
+    // property; UAsset.Write derives them in a pre-pass, so nothing is needed
+    // here beyond the value.
+    private static void SetServerStreaming(UAsset asset, string mode, string outMode)
+    {
+        int wpIdx = -1;
+        for (int i = 0; i < asset.Exports.Count; i++)
+        {
+            var ci = asset.Exports[i].ClassIndex;
+            var cls = ci.IsImport() ? ci.ToImport(asset).ObjectName.ToString() : "";
+            if (cls == "WorldPartition") { wpIdx = i; break; }
+        }
+        if (wpIdx < 0) { Console.WriteLine("  server-streaming: no WorldPartition export"); return; }
+        var wp = (NormalExport)asset.Exports[wpIdx];
+
+        void Set(string prop, string enumType, string value)
+        {
+            if (value.Length == 0) return;
+            string fq = enumType + "::" + value;
+            EnsureName(asset, prop); EnsureName(asset, enumType); EnsureName(asset, fq);
+            var existing = wp.Data.OfType<EnumPropertyData>()
+                             .FirstOrDefault(p => p.Name.ToString() == prop);
+            if (existing != null)
+            {
+                Console.WriteLine($"  {prop}: {existing.Value} -> {fq}");
+                existing.EnumType = FName.FromString(asset, enumType);
+                existing.Value = FName.FromString(asset, fq);
+                return;
+            }
+            wp.Data.Add(new EnumPropertyData(FName.FromString(asset, prop))
+            {
+                EnumType = FName.FromString(asset, enumType),
+                Value = FName.FromString(asset, fq),
+            });
+            Console.WriteLine($"  {prop}: (absent, was ProjectDefault) -> {fq}");
+        }
+
+        Set("ServerStreamingMode", "EWorldPartitionServerStreamingMode", mode);
+        Set("ServerStreamingOutMode", "EWorldPartitionServerStreamingOutMode", outMode);
+    }
+
+    private static int SetServerStreamingCmd(string[] args)
+    {
+        var f = ParseFlags(args);
+        var path = f["umap"];
+        var asset = new UAsset(path, EngineVer, LoadMappings(f["mappings"]));
+        SetServerStreaming(asset, f.GetValueOrDefault("mode", "Enabled"),
+                                  f.GetValueOrDefault("out-mode", ""));
+        asset.Write(path);
+        return 0;
     }
 
     private static int SetLoadingRangeCmd(string[] args)

@@ -597,6 +597,20 @@ if not "%MTMI_DELTA%"=="1" (
     if errorlevel 1 exit /b 1
 )
 
+rem DEDICATED SERVER only. A server loads every world partition cell at once
+rem unless streaming is switched on IN THE MAP, and that is what makes foliage
+rem unaffordable: 1.96M colliding instances is 117 seconds of physics bodies on
+rem the game thread and the Steam logon expires first. ServerStreamingMode
+rem defaults to ProjectDefault, which is meant to defer to
+rem wp.Runtime.EnableServerStreaming -- on this build that cvar measured a flat
+rem line, so the enum is written onto the map instead. Measured with the same
+rem foliage: 117s and 17.4 GB -> 5s and 2.1 GB.
+if "%MTMI_SERVER_STREAMING%"=="1" (
+    echo [%TIME%] [5e3] Enabling world partition server streaming in the map...
+    "%INJECTOR%" set-server-streaming --umap "%UMAP%" --mappings "%MTMI_MAPPINGS%" --mode Enabled --out-mode Enabled
+    if errorlevel 1 exit /b 1
+)
+
 rem The clean step wipes three folders and nothing else, so an asset painted
 rem into the scene once and removed later keeps shipping forever -- the pak only
 rem ever grows. This walks the package references out of the maps and data
