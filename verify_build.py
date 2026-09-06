@@ -100,11 +100,25 @@ def _dump_row(uasset: Path, row: str) -> dict[str, str] | None:
     return fields or None
 
 
+def _enum_bare(v) -> str:
+    """'EDeliveryCargoType::None' -> 'None'.
+
+    A VERSIONED package stores enum values fully qualified; the unversioned
+    client cook stores them bare. The dedicated-server cook is versioned, so
+    every enum field in its pak read back as 'EnumType::Value' and 14 cargo
+    rows failed on a difference that is only spelling.
+    """
+    t = str(v).strip()
+    return t.rsplit("::", 1)[-1] if "::" in t else t
+
+
 def _num_eq(a: str, b) -> bool:
     try:
         return abs(float(a) - float(b)) < 1e-3
     except (ValueError, TypeError):
-        return str(a).strip() == str(b).strip()
+        if str(a).strip() == str(b).strip():
+            return True
+        return _enum_bare(a) == _enum_bare(b)
 
 
 def main() -> int:
