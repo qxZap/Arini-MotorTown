@@ -183,42 +183,7 @@
     "Delivery point classes never hit this because their folder is not named",
     "after the class."
   ],
-  "modify": [
-    {
-      "row": "Crany",
-      "_": "Crany's rope has no tension because MTCraneComponent.Winch is null, and it is null because a winch is spawned at runtime from a PART fitted to a SLOT -- not authored as a component. Crany declares no slots at all, so there is nowhere for one to go. Crane0 ONLY: Pulio also carries Utility0 and Utility1, but those are a tow truck's business and would offer Crany equipment it has no arm for.",
-      "modifications": [
-        {
-          "type": "crane_winch",
-          "name": "MTWinch",
-          "crane": "MTCrane_GEN_VARIABLE",
-          "_": "The rope's tension refreshes the moment the controller is picked up and never changes in between -- so tension IS computed, on discrete interaction events, and nothing updates it per-frame. MTCraneComponent.Winch is null, so the crane has nothing to tick. MTWinchComponent is a real class, so this adds one and points the crane at it rather than waiting for a spawn the Blueprint never does."
-        },
-        {
-          "type": "part_slots",
-          "field": "NotOptionalPartSlots",
-          "add": [
-            "EMTVehiclePartSlot::Crane0"
-          ]
-        },
-        {
-          "type": "interactable",
-          "name": "CraneWinchControl",
-          "types": [
-            "Crane0_In",
-            "Crane0_Out"
-          ],
-          "_": "Crany has a crane SEAT and no crane INTERACTION. GolimaRotator, whose crane works, carries CraneInteraction_L and _R as dedicated components; Crany's only interactables are for the driver and passenger seats. EMotorTownInteractableType has Crane0_In (50) and Crane0_Out (51) -- the winch in/out for the crane slot Crany now declares -- and nothing on the vehicle exposed them."
-        },
-        {
-          "type": "all_wheel_drive",
-          "each_set_awd": true,
-          "enable_center_diff": true,
-          "_": "Front and rear each get a differential, with a centre one they both feed -- the shape vanilla AWD vehicles actually use. A crane truck spends its life on soft ground and outriggers."
-        }
-      ]
-    }
-  ],
+  "modify": [],
   "_crany_finding": [
     "CRANY CRANE: the constraint approach CRASHES. Do not re-add without a new idea.",
     "",
@@ -238,5 +203,26 @@
     "A real fix means replacing MTCraneComponent with a constraint-driven arm, which",
     "also replaces what CraneSeat currently talks to. That is a vehicle rebuild, not",
     "a patch."
+  ],
+  "_crany_dropped": [
+    "Crany's crane modifications are DROPPED, deliberately, 7 Sep 2026.",
+    "",
+    "MTCraneComponent -- which is what drives Crany's crane -- has EIGHT",
+    "properties and NOT ONE of them replicates. No Net_ fields at all, where",
+    "MTWinchComponent has 13 and MTConstraintComponent has 5. So a crane driven",
+    "by it is local-only by construction: whatever it does on the operator's",
+    "machine, the server has no state to hold and no one else ever sees it.",
+    "",
+    "That makes the whole crane_winch approach unshippable on a server, which is",
+    "where this island is played. The other route -- physics constraints, as",
+    "GolimaRotator and Brutus_Wrecker use -- is recorded in _crany_finding as",
+    "crashing on vehicle exit, and even that only half works on a dedicated",
+    "server (see below).",
+    "",
+    "Players reported broken winches and a broken rotator on this very server in",
+    "October 2025, eleven months before this pipeline built anything for a",
+    "server. Crane replication is the developer's to fix; no pak can do it.",
+    "",
+    "Dropped entries were: Crany"
   ]
 }
