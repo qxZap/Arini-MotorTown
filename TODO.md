@@ -1,12 +1,12 @@
 # TODO
 
 Working list. Each item records what is KNOWN (verified, with evidence) versus
-what is GUESSED, so nobody re-tests a settled fact. Current to the 2026-09-05
+what is GUESSED, so nobody re-tests a settled fact. Current to the 2026-09-07
 release build.
 
 Solved: 1 (delivery points), 2 (icons), 4 (fog), 5 (foliage streaming),
 6 (pumps and garages), 8 (economy balance), 11 (snow), 12 (compat layers).
-Open: 3 (heights), 7 (fences), 9 (odds and ends), 13 (memory).
+Open: 3 (heights), 7 (fences), 9 (odds and ends), 15 (breakables).
 
 **Shipping as of 2026-09-05:** four zips in `Downloads/Arini` -- the island
 plus three compatibility patches, two of which carry an MTNet variant. Six
@@ -683,6 +683,66 @@ bytes: the two are separate cooks, so every shared asset legitimately differs.
   any cell.
 - The economy compats shipped to a server are CLIENT builds. They work, but a
   `*_server` compat layer would be correct.
+
+---
+
+## 15. KNOCK-OVER BUSHES AND SMALL TREES
+
+Asked for 7 Sep: make bushes and small trees on Arini give way when you hit
+them, the way they do on vanilla Jeju.
+
+**KNOWN — the mechanism is an ACTOR CLASS, not a collision profile.**
+`MTBreakable` (super `StaticMeshActor`, 15 props) holds a mesh on a physics
+constraint plus a `TriggerSphere`. The constraint resists until the linear
+force through it passes `LinearBreakThreshold`, then releases. So it is
+genuinely force-based: roll into a bush slowly and nothing happens, because the
+impulse never crosses the threshold.
+
+`Net_BreakableRuntimeFlags` is replicated, so these work on a dedicated server
+— unlike cranes (item 14 / vehicles.json).
+
+**KNOWN — 124 of them ship in `/Game/Objects/Brakeable/`** (the game's own
+spelling), including 26 trees `Tree_10`..`Tree_45` and `Bush_02`..`Bush_06`.
+Measured thresholds:
+
+    Cone_01, Barrier_01                                   1,000
+    Bush_02, Bush_04, Barrel_01, Pole_01, RoadSign_01    10,000
+    Bush_06                                             100,000
+    StoneWall_01                                     25,000,000
+    PowerPole_01                                    100,000,000
+    every Tree_*                    class default, none override it
+
+`Bush_02` carries `bDisableVehicleCollisionAfterBreak=True`, physmat
+`PM_Wood`, and mesh `/Game/AssetsvilleTown/Meshes/Nature/SM_bush_01` — the same
+bush family the island already paints, so a promoted bush will look right.
+
+**KNOWN — the `Destructible` collision profile is NOT this.** It exists
+(DefaultEngine.ini line 245, `QueryAndPhysics`), and our two `SM_bush_01`
+variants disagree about it — `DC/Meshes/Nature` is `BlockAll`, `NatureGreen` is
+`Destructible` — but that profile is not what makes vanilla bushes fall over,
+and setting it buys nothing. Recorded because it was asserted as the fix once
+already and is a convincing wrong answer.
+
+**KNOWN — why nothing on Arini can break today.** Our bushes are foliage
+INSTANCES inside `FoliageInstancedStaticMeshComponent`s, 273,160 of them. An
+instance has no constraint and no trigger sphere. No mesh setting changes that.
+
+**THE PLAN.** Place real `MTBreakable` actors. Three things make it tractable:
+they are VANILLA classes, so no cloning and no rename trap — placed the way
+`POI_House_C` already is; the pipeline ALREADY promotes foliage to persistent
+actors (9,183 rocks per build), so the path exists; and the meshes match.
+
+Shape: a config naming which foliage mesh promotes to which breakable class, so
+tuning means choosing `Bush_02` (10,000) over `Bush_06` (100,000) rather than
+inventing numbers.
+
+**GUESSED, not measured:**
+- That a curated few thousand actors is affordable. One UObject each, so all
+  273k is out of the question; the budget has not been tested. Bushes within
+  reach of a road is the obvious subset.
+- The class-default threshold every `Tree_*` inherits. The `.usmap` carries
+  property names and types, not defaults, so it is not readable from the
+  cooked data — only observable in game.
 
 ---
 
