@@ -15,7 +15,7 @@ OUT = Path.home() / "Downloads" / "Arini"
 # The server pak is deployed into the DEDICATED SERVER install, not the game's,
 # because the two are separate targets with separate Paks folders.
 SERVER_PAKDIR = (Path(_cfg("MT_SERVER_DIR", "") or "") / "MotorTown" / "Content" / "Paks")
-BASE = "Arini_2_P.pak"
+BASE = "Arini_P.pak"
 
 INSTALL = """HOW TO INSTALL
 --------------
@@ -46,10 +46,12 @@ and the changes just are not there.
 """
 
 UPGRADE_WARNING = """
-IMPORTANT IF YOU ALREADY HAD AN EARLIER VERSION
-Delete the old files first. They were named with leading z's -- zzzz_Arini_P.pak
-and similar. Leaving one alongside the new file means the game loads both, and
-which one wins is not something you want to leave to chance.
+
+WHY THIS FILE HAS A NUMBER IN ITS NAME
+Unreal decides which pak wins by the digits immediately before the _P suffix --
+a patch index -- and only falls back to alphabetical order between equal
+indices. Atlas 8x8 ships as _1_0_1_P, index 1, so a compat for it has to be
+index 2 or higher. That number is not a version. Do not rename this file.
 """
 
 RELEASES = [
@@ -77,8 +79,8 @@ The MTNet folder is not a different economy -- it is the same patch, built to
 keep MTNet's reverse-proxy endpoints working. MTNet's config file would
 otherwise replace ours and switch off the island's fog. Install ONE of the
 two, never both.""",
-         folders={"Default": ["Arini_CapEcon_3_P.pak"],
-                  "MTNet":   ["Arini_CapEconMTNet_3_P.pak"]}),
+         folders={"Default": ["zzzz_Arini_zCapEcon_P.pak"],
+                  "MTNet":   ["zzzzz_Arini_CapEconMTNet_P.pak"]}),
 
     dict(zip_name="Arini_ProxyOversizedCargo_Compat.zip",
          title="Arini - Proxy's Oversized Cargo compatibility",
@@ -88,7 +90,7 @@ Adds 79 of Proxy's cargos to the island, priced for it, and opens a trade
 route in both directions: Jeju's construction sites supply Galati Port, and
 Braila Port produces 29 loads that Jeju's sites, mines and farms ask for and
 nothing else in the game makes.""",
-         folders={None: ["Arini_Proxy_3_P.pak"]}),
+         folders={None: ["zzzz_Arini_zProxy_P.pak"]}),
 
     dict(zip_name="Arini_CapEcon_Proxy_Compat.zip",
          title="Arini - Capitalist Economy + Proxy compatibility",
@@ -99,8 +101,8 @@ Cargo. Use this INSTEAD of the two single-mod patches, not alongside them.
   MTNet\      use this one INSTEAD if you also run MTNet
 
 Install ONE folder's pak, never both.""",
-         folders={"Default": ["Arini_ProxyCapEcon_3_P.pak"],
-                  "MTNet":   ["Arini_ProxyCapEconMTNet_3_P.pak"]}),
+         folders={"Default": ["zzzz_Arini_zProxyCapEcon_P.pak"],
+                  "MTNet":   ["zzzzz_Arini_ProxyCapEconMTNet_P.pak"]}),
 
     dict(zip_name="Arini_Atlas8x8_Compat.zip",
          title="Arini - Atlas 8x8 Semi compatibility",
@@ -145,7 +147,7 @@ listing, and never tells you why.
 Everyone connecting still needs the player pak. Install it as usual.
 
 INSTALL
-  1. Copy Arini_Server_2_P.pak into:
+  1. Copy Arini_Server_P.pak into:
        ...\Motor Town Behind The Wheel - Dedicated Server\MotorTown\Content\Paks
   2. Start the server as you normally do.
   3. In MotorTown\Saved\ServerLog\<timestamp>.log you want to see:
@@ -158,8 +160,8 @@ WITH ECONOMY MODS
   Install the mods, then the compat, in filename order (last one wins):
        X_qxZap_CapitalistEconomy*.pak      the mod
        zzProxysOversizeCargoV4-*.pak       the mod
-       Arini_Server_2_P.pak                the island
-       Arini_ProxyCapEcon_3_P.pak          the compat, from its own download
+       Arini_Server_P.pak                  the island
+       zzzz_Arini_zProxyCapEcon_P.pak      the compat, from its own download
   Use the NON-MTNet compat on a server.
 
 WHAT THIS BUILD LEAVES OUT, DELIBERATELY
@@ -169,14 +171,15 @@ WHAT THIS BUILD LEAVES OUT, DELIBERATELY
   own pak and both see and drive into it.
 
   The 24 vehicle dealership spawn points. Vanilla dealerships are unaffected.""",
-         folders={None: ["Arini_Server_2_P.pak"]}),
+         folders={None: ["Arini_Server_P.pak"]}),
 ]
 
 
 # Every download says the same thing about upgrading: the old paks were named
 # with leading z's, and leaving one behind means the game loads two copies.
 for _r in RELEASES:
-    _r['body'] = _r['body'].rstrip() + UPGRADE_WARNING
+    if 'Atlas' in _r['zip_name']:
+        _r['body'] = _r['body'].rstrip() + UPGRADE_WARNING
 
 
 def readme(r) -> str:
