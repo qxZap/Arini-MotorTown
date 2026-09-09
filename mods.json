@@ -53,12 +53,11 @@
     "self": {
       "label": "our own output",
       "match": [
-        "zzzz_Ar",
-        "zzzz_Arini",
+        "Arini",
         "TankersFuelPump_Arini"
       ],
       "always_skip": true,
-      "_": "'zzzz_Ar' rather than 'zzzz_Arini': any pak WE produce, including the cut-down ones used to bisect a server failure, must never be read back as a vanilla source. A stray test pak in the server's Paks folder was being picked up as the baseline for the vehicle tables mid-build."
+      "_": "Our own output, never a base to build on. Matches on 'Arini' because the paks no longer carry a run of z's: Unreal decides an override by the PATCH INDEX -- the digits before _P -- and only falls back to filename order between equal indices. A clean name at index 2 beats zzzzzzz_ at index 0, which is why seven z's lost to Atlas's _1_P for a whole day."
     },
     "capitalist": {
       "label": "Capitalist Economy",
@@ -94,6 +93,13 @@
         "ZZZZMTNet"
       ],
       "_": "Ships two console variables and both are the host's own localhost URLs. Merging them would put one machine's server addresses in every player's pak, so no layer sees it."
+    },
+    "atlas": {
+      "label": "Atlas 8x8 Semi",
+      "match": [
+        "Atlas_8x8_Semi"
+      ],
+      "_": "Adds three Atlas 8x8 trucks and 29 garage parts. It ships exactly ONE asset we also ship -- DataAsset/Vehicles/Vehicles_Truck -- and its pak carries SIX leading z's against our four, so it mounts last and its copy of that table wins. That drops our unlocks AND Capitalist Economy's truck rows, since CapEcon ships 13 of the 15 tables including this one."
     }
   },
   "layers": {
@@ -102,91 +108,98 @@
         "capitalist",
         "proxy",
         "moretuning",
-        "mtnet"
+        "mtnet",
+        "atlas"
       ],
-      "mod_name": "Arini_P",
+      "mod_name": "Arini_2_P",
       "_": "The base release. Sees the stock game and nothing else.",
       "delta": false,
-      "pak_prefix": "zzzz_"
+      "pak_prefix": ""
     },
     "capitalist": {
       "skip": [
         "proxy",
         "moretuning",
-        "mtnet"
+        "mtnet",
+        "atlas"
       ],
       "requires": [
         "capitalist"
       ],
-      "mod_name": "Arini_zCapEcon_P",
+      "mod_name": "Arini_CapEcon_3_P",
       "_": "For players running Capitalist Economy.",
       "delta": true,
-      "pak_prefix": "zzzz_"
+      "pak_prefix": ""
     },
     "proxy": {
       "skip": [
         "capitalist",
         "moretuning",
-        "mtnet"
+        "mtnet",
+        "atlas"
       ],
       "requires": [
         "proxy"
       ],
-      "mod_name": "Arini_zProxy_P",
+      "mod_name": "Arini_Proxy_3_P",
       "_": "For players running Proxy's oversized cargo.",
       "delta": true,
-      "pak_prefix": "zzzz_"
+      "pak_prefix": ""
     },
     "proxy_capitalist": {
       "skip": [
         "moretuning",
-        "mtnet"
+        "mtnet",
+        "atlas"
       ],
       "requires": [
         "capitalist",
         "proxy"
       ],
-      "mod_name": "Arini_zProxyCapEcon_P",
+      "mod_name": "Arini_ProxyCapEcon_3_P",
       "_": "Both. The ecosystem already ships this shape -- ZZZ_qxZap_CapitalistEconomy_ProxyOversizedCargos_P.pak is exactly a two-mod bridge, and it holds four files.",
       "delta": true,
-      "pak_prefix": "zzzz_"
+      "pak_prefix": ""
     },
     "capitalist_mtnet": {
       "skip": [
         "proxy",
-        "moretuning"
+        "moretuning",
+        "atlas"
       ],
       "requires": [
         "capitalist",
         "mtnet"
       ],
-      "mod_name": "Arini_CapEconMTNet_P",
+      "mod_name": "Arini_CapEconMTNet_3_P",
       "_": "Capitalist Economy alongside MTNet. MTNet adds the reverse-proxy endpoints CapEcon talks to, so the pair behaves differently from CapEcon alone -- it is a gameplay difference, not just preserved settings. Named to mount AFTER ZZZZMTNet_P: any zzzz_ name loses to it, because at char 4 '_' sorts before 'm'.",
       "delta": true,
-      "pak_prefix": "zzzzz_"
+      "pak_prefix": ""
     },
     "proxy_capitalist_mtnet": {
       "skip": [
-        "moretuning"
+        "moretuning",
+        "atlas"
       ],
       "requires": [
         "capitalist",
         "mtnet",
         "proxy"
       ],
-      "mod_name": "Arini_ProxyCapEconMTNet_P",
+      "mod_name": "Arini_ProxyCapEconMTNet_3_P",
       "_": "Both cargo mods plus MTNet's reverse proxy. Same naming rule.",
       "delta": true,
-      "pak_prefix": "zzzzz_"
+      "pak_prefix": ""
     },
     "server": {
-      "mod_name": "Arini_Server_P",
-      "pak_prefix": "zzzz_",
+      "mod_name": "Arini_Server_2_P",
+      "pak_prefix": "",
       "skip": [
         "capitalist",
         "proxy",
         "moretuning",
-        "mtnet"
+        "mtnet",
+        "atlas"
       ],
       "env": {
         "MT_GAME_DIR": "${MT_SERVER_DIR}",
@@ -197,6 +210,25 @@
         "MTMI_SERVER_STREAMING": "1"
       },
       "_": "The DEDICATED SERVER build. Not a compat layer -- a second TARGET, with its own game install, vanilla extract and cook. The server ships its own cook of the same content: Jeju_World.uexp is 371 MB against the client's 290 MB, and its packages use VERSIONED property serialization where the client's are unversioned. MTMI_SKIP_DEALERS is the one remaining omission: those 24 actors are still reverse-engineered unversioned blobs the server cook cannot read. Everything else -- map, cells, 15,042 props, foliage, delivery points, economy -- must match the CLIENT exactly, or a client teleporting to the island waits forever for actors the server never sends. Deploy follows MT_GAME_DIR, so this lands in the SERVER's Paks folder. Server and client paks are NOT interchangeable -- ship both."
+    },
+    "atlas": {
+      "skip": [
+        "moretuning"
+      ],
+      "requires": [
+        "atlas",
+        "capitalist",
+        "mtnet",
+        "proxy"
+      ],
+      "mod_name": "Arini_Atlas_4_P",
+      "_": "Arini <-> Atlas 8x8. Ships ONE table: DataAsset/Vehicles/Vehicles_Truck. THE NAME IS LOAD-BEARING AND NOT ABOUT z's. Unreal reads the digits before the _P suffix as a PATCH INDEX and a higher index wins outright -- filename order is never consulted. Atlas ships as ..._1_0_1_P.pak, index 1, which is why its README insists on that suffix; anything ending in a plain _P is index 0 and loses to it however many z's it carries. This is index 2. The parts-composite and transfer-case-label fixes are NOT here: they are Atlas's quarrel with the parts mods, not with the island, and ship as their own pak via parts_compat.py.",
+      "delta": true,
+      "pak_prefix": "",
+      "env": {
+        "MTMI_DELTA_ONLY": "DataAsset/Vehicles/Vehicles_Truck",
+        "MTMI_SKIP_CONFIG": "1"
+      }
     }
   }
 }

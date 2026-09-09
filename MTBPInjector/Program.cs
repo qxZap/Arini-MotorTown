@@ -94,6 +94,8 @@ internal static class Program
                 "set-worldmap" => SetWorldMap(args.Skip(1).ToArray()),
                 "set-loading-range" => SetLoadingRangeCmd(args.Skip(1).ToArray()),
                 "set-server-streaming" => SetServerStreamingCmd(args.Skip(1).ToArray()),
+                "register-parent-tables" => RegisterParentTablesCmd(args.Skip(1).ToArray()),
+                "extend-stringtable" => ExtendStringTableCmd(args.Skip(1).ToArray()),
                 "verify-typenames" => VerifyTypeNames(args.Skip(1).ToArray()),
                 "clone-vehicle-row" => CloneVehicleRow(args.Skip(1).ToArray()),
                 "vehicle-awd" => VehicleAllWheelDrive(args.Skip(1).ToArray()),
@@ -3455,6 +3457,104 @@ internal static class Program
         SetServerStreaming(asset, f.GetValueOrDefault("mode", "Enabled"),
                                   f.GetValueOrDefault("out-mode", ""));
         asset.Write(path);
+        return 0;
+    }
+
+    // Register parent tables on a CompositeDataTable.
+    //
+    // DataAsset/VehicleParts/VehicleParts is a COMPOSITE table: it holds no
+    // parts, it names the tables that do. Every parts mod ships its own copy
+    // listing the parents IT knows about, and paks mount in filename order, so
+    // the last one wins and silently unregisters everybody else's tables. The
+    // assets are still installed and the game never looks at them -- the parts
+    // simply are not offered, with no error anywhere.
+    //
+    // Atlas 8x8 (six leading z's) lists 21 parents and omits Wheels_PT, which
+    // is ProxyTechWheels', so those wheels cannot be fitted to anything.
+    //
+    // This appends missing parents to whatever the effective table already has,
+    // rather than writing a list of our own -- the next mod to ship a composite
+    // would only overwrite that anyway. Ours mounts last, so the union wins.
+    private static int RegisterParentTablesCmd(string[] args)
+    {
+        var f = ParseFlags(args);
+        var path = f["uasset"];
+        var asset = new UAsset(path, EngineVer, LoadMappings(f["mappings"]));
+
+        var wanted = (f.GetValueOrDefault("add", "") ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
+        if (wanted.Count == 0)
+        { Console.Error.WriteLine("  register-parent-tables: --add is required"); return 1; }
+
+        NormalExport? table = null;
+        foreach (var ex in asset.Exports)
+            if (ex is NormalExport ne &&
+                ne.Data.Any(p => p.Name.ToString() == "ParentTables")) { table = ne; break; }
+        if (table == null)
+        { Console.Error.WriteLine("  register-parent-tables: no ParentTables property"); return 1; }
+
+        var arr = table.Data.OfType<ArrayPropertyData>()
+                       .First(p => p.Name.ToString() == "ParentTables");
+
+        var have = new HashSet<string>();
+        foreach (var v in arr.Value)
+            if (v is ObjectPropertyData op && op.Value.IsImport())
+                have.Add(op.Value.ToImport(asset).ObjectName.ToString());
+
+        var added = new List<PropertyData>(arr.Value);
+        int n = 0;
+        foreach (var full in wanted)
+        {
+            var leaf = full.Substring(full.LastIndexOf('/') + 1);
+            if (have.Contains(leaf)) { Console.WriteLine($"  already registered: {leaf}"); continue; }
+            int pkg = FindOrAddImport(asset, full, 0, "/Script/CoreUObject", "Package");
+            int tbl = FindOrAddImport(asset, leaf, pkg, "/Script/Engine", "DataTable");
+            added.Add(ObjProp(asset, "ParentTables", tbl));
+            Console.WriteLine($"  registered: {leaf}");
+            n++;
+        }
+        arr.Value = added.ToArray();
+        Console.WriteLine($"  ParentTables: {have.Count} -> {have.Count + n}");
+        asset.Write(path);
+        return 0;
+    }
+
+    // Add entries to an existing StringTable, keeping its identity.
+    //
+    // make-stringtable CLONES a table under a new namespace and clears it --
+    // right for inventing ModCargo, wrong for patching a vanilla table, where
+    // the package path and namespace ARE the lookup and must not move.
+    //
+    // Existing keys are never overwritten. We are adding what vanilla never
+    // defined, not restating what it did, and a mod that already supplied a
+    // key should keep its wording.
+    private static int ExtendStringTableCmd(string[] args)
+    {
+        var f = ParseFlags(args);
+        var asset = new UAsset(f["src"], EngineVer, LoadMappings(f["mappings"]));
+        var entries = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(f["entries"]));
+
+        UAssetAPI.ExportTypes.StringTableExport? ste = null;
+        foreach (var e in asset.Exports)
+            if (e is UAssetAPI.ExportTypes.StringTableExport t2) { ste = t2; break; }
+        if (ste == null) { Console.Error.WriteLine("  no StringTableExport in source"); return 1; }
+
+        var have = new HashSet<string>();
+        foreach (var kv in ste.Table) have.Add(kv.Key.Value);
+
+        int added = 0;
+        foreach (var prop in entries.Properties())
+        {
+            string key = prop.Name, val = prop.Value.ToString();
+            if (have.Contains(key)) { Console.WriteLine($"  already present: {key}"); continue; }
+            EnsureName(asset, key); EnsureName(asset, val);
+            ste.Table.Add(new FString(key), new FString(val));
+            Console.WriteLine($"  added: {key} = \"{val}\"");
+            added++;
+        }
+        asset.Write(f["output"]);
+        Console.WriteLine($"  StringTable '{ste.Table.TableNamespace}': {have.Count} -> {have.Count + added} entries");
         return 0;
     }
 

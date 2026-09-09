@@ -15,7 +15,7 @@ OUT = Path.home() / "Downloads" / "Arini"
 # The server pak is deployed into the DEDICATED SERVER install, not the game's,
 # because the two are separate targets with separate Paks folders.
 SERVER_PAKDIR = (Path(_cfg("MT_SERVER_DIR", "") or "") / "MotorTown" / "Content" / "Paks")
-BASE = "zzzz_Arini_P.pak"
+BASE = "Arini_2_P.pak"
 
 INSTALL = """HOW TO INSTALL
 --------------
@@ -27,9 +27,29 @@ INSTALL = """HOW TO INSTALL
 To uninstall, delete the .pak files you copied.
 
 DO NOT RENAME THE FILES. Unreal mounts paks in filename order and the last
-one wins, so the leading z's are what make a compatibility patch load after
-the mod it patches. Rename one and it silently stops working -- everything
-loads, nothing errors, and the changes just are not there.
+one wins -- but ONLY between paks of equal patch index. Unreal reads the
+digits immediately before the _P suffix as that index, and a higher index
+wins outright without filename order ever being consulted.
+
+That is why these are named Arini_2_P / _3_P / _4_P and carry no run of z's.
+Seven leading z's at index 0 lose to a mod shipping _1_P, which is exactly
+what happened against Atlas 8x8: four different compat paks verified as
+correct and changed nothing, because they were outranked before their
+contents were read.
+
+  index 2  the island and the server build
+  index 3  the economy compats, which must beat the island
+  index 4  mod-specific compats, which must beat both
+
+Rename one and it silently stops working -- everything loads, nothing errors,
+and the changes just are not there.
+"""
+
+UPGRADE_WARNING = """
+IMPORTANT IF YOU ALREADY HAD AN EARLIER VERSION
+Delete the old files first. They were named with leading z's -- zzzz_Arini_P.pak
+and similar. Leaving one alongside the new file means the game loads both, and
+which one wins is not something you want to leave to chance.
 """
 
 RELEASES = [
@@ -57,8 +77,8 @@ The MTNet folder is not a different economy -- it is the same patch, built to
 keep MTNet's reverse-proxy endpoints working. MTNet's config file would
 otherwise replace ours and switch off the island's fog. Install ONE of the
 two, never both.""",
-         folders={"Default": ["zzzz_Arini_zCapEcon_P.pak"],
-                  "MTNet":   ["zzzzz_Arini_CapEconMTNet_P.pak"]}),
+         folders={"Default": ["Arini_CapEcon_3_P.pak"],
+                  "MTNet":   ["Arini_CapEconMTNet_3_P.pak"]}),
 
     dict(zip_name="Arini_ProxyOversizedCargo_Compat.zip",
          title="Arini - Proxy's Oversized Cargo compatibility",
@@ -68,7 +88,7 @@ Adds 79 of Proxy's cargos to the island, priced for it, and opens a trade
 route in both directions: Jeju's construction sites supply Galati Port, and
 Braila Port produces 29 loads that Jeju's sites, mines and farms ask for and
 nothing else in the game makes.""",
-         folders={None: ["zzzz_Arini_zProxy_P.pak"]}),
+         folders={None: ["Arini_Proxy_3_P.pak"]}),
 
     dict(zip_name="Arini_CapEcon_Proxy_Compat.zip",
          title="Arini - Capitalist Economy + Proxy compatibility",
@@ -79,8 +99,35 @@ Cargo. Use this INSTEAD of the two single-mod patches, not alongside them.
   MTNet\      use this one INSTEAD if you also run MTNet
 
 Install ONE folder's pak, never both.""",
-         folders={"Default": ["zzzz_Arini_zProxyCapEcon_P.pak"],
-                  "MTNet":   ["zzzzz_Arini_ProxyCapEconMTNet_P.pak"]}),
+         folders={"Default": ["Arini_ProxyCapEcon_3_P.pak"],
+                  "MTNet":   ["Arini_ProxyCapEconMTNet_3_P.pak"]}),
+
+    dict(zip_name="Arini_Atlas8x8_Compat.zip",
+         title="Arini - Atlas 8x8 Semi compatibility",
+         body="""Requires the Arini island and the Atlas 8x8 Semi mod.
+
+Atlas ships its own copy of the truck listing at a higher patch index than the
+island, so its copy wins and the island's vehicle changes go missing. This
+restores the merge: Atlas's trucks, the island's unlocks and Capitalist
+Economy's rows all present at once.
+
+One table, nothing else. If you do not run Atlas 8x8, you do not need this.""",
+         folders={None: ["Arini_Atlas_4_P.pak"]}),
+
+    dict(zip_name="ProxyWheels_Atlas8x8_Compat.zip",
+         title="Proxy's wheels + Atlas 8x8 compatibility",
+         body="""Requires the Atlas 8x8 Semi mod and ProxyTech Wheels. It does NOT
+require Arini -- this fixes a conflict between two other mods and stands alone.
+
+Motor Town lists vehicle parts through a composite table naming which part
+tables exist. Every parts mod ships its own copy of that list and only one can
+win, so Atlas's copy -- which does not name ProxyTech's wheel table -- made
+those wheels vanish from every vehicle in the game.
+
+This ships the union: Atlas's parts, ProxyTech's wheels and MoreTuning's tables
+registered together. It also adds the 8-wheel-drive transfer-case labels, which
+vanilla never defined, so the readout stops coming up blank on an 8x8.""",
+         folders={None: ["ProxyWheels_Atlas_Compat_4_P.pak"]}),
 
     dict(zip_name="Arini_DedicatedServer.zip",
          title="Arini - dedicated server",
@@ -98,7 +145,7 @@ listing, and never tells you why.
 Everyone connecting still needs the player pak. Install it as usual.
 
 INSTALL
-  1. Copy zzzz_Arini_Server_P.pak into:
+  1. Copy Arini_Server_2_P.pak into:
        ...\Motor Town Behind The Wheel - Dedicated Server\MotorTown\Content\Paks
   2. Start the server as you normally do.
   3. In MotorTown\Saved\ServerLog\<timestamp>.log you want to see:
@@ -111,8 +158,8 @@ WITH ECONOMY MODS
   Install the mods, then the compat, in filename order (last one wins):
        X_qxZap_CapitalistEconomy*.pak      the mod
        zzProxysOversizeCargoV4-*.pak       the mod
-       zzzz_Arini_Server_P.pak             the island
-       zzzz_Arini_zProxyCapEcon_P.pak      the compat, from its own download
+       Arini_Server_2_P.pak                the island
+       Arini_ProxyCapEcon_3_P.pak          the compat, from its own download
   Use the NON-MTNet compat on a server.
 
 WHAT THIS BUILD LEAVES OUT, DELIBERATELY
@@ -122,8 +169,14 @@ WHAT THIS BUILD LEAVES OUT, DELIBERATELY
   own pak and both see and drive into it.
 
   The 24 vehicle dealership spawn points. Vanilla dealerships are unaffected.""",
-         folders={None: ["zzzz_Arini_Server_P.pak"]}),
+         folders={None: ["Arini_Server_2_P.pak"]}),
 ]
+
+
+# Every download says the same thing about upgrading: the old paks were named
+# with leading z's, and leaving one behind means the game loads two copies.
+for _r in RELEASES:
+    _r['body'] = _r['body'].rstrip() + UPGRADE_WARNING
 
 
 def readme(r) -> str:

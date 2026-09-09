@@ -323,6 +323,15 @@ rem mt_paths resolves vanilla assets through the installed paks, so a mod that
 rem overrides Cargos or Vehicles silently becomes our baseline -- right when
 rem building the layer FOR that mod, wrong for the plain release. mods.py turns
 rem a layer name into the pak exclusions and the mod identity.
+rem DEFAULT THE LAYER. Without this, any invocation that does not pass --layer
+rem (--only-vehicles, --only-pack) skipped this whole block, so
+rem MTMI_EXCLUDE_PAKS was never set and effective_asset resolved vehicle and
+rem cargo tables through EVERY installed pak -- including the ones we shipped
+rem last build. The plain release then quietly inherited its own previous
+rem output, and whatever that had inherited before it. mods.py has always
+rem defaulted to vanilla; build.bat just never asked.
+if not defined MTMI_LAYER set "MTMI_LAYER=vanilla"
+
 if defined MTMI_LAYER (
     for /f "usebackq delims=" %%i in (`python mods.py --layer %MTMI_LAYER%`) do set "MTMI_EXCLUDE_PAKS=%%i"
     for /f "usebackq delims=" %%i in (`python mods.py --layer %MTMI_LAYER% --mod-name`) do set "MTMI_MOD_NAME=%%i"
@@ -626,6 +635,26 @@ rem Step 3 writes a map on its way to producing the Mod* classes, so a delta
 rem layer has one staged even with the map steps off. Strip it here rather
 rem than trusting every step to have stayed in its lane.
 if "%MTMI_DELTA%"=="1" (
+rem A compat layer that mounts LAST is the only thing that can repair the parts
+rem registry: DataAsset/VehicleParts/VehicleParts is a COMPOSITE table naming
+rem the tables that hold the parts, every parts mod ships its own copy, and the
+rem last pak wins -- silently unregistering everybody else's. No-op unless
+rem MTMI_PARTS_REGISTRY=1.
+if "%MTMI_PARTS_REGISTRY%"=="1" (
+    echo [%TIME%] [5c2] Re-registering parts tables the load order dropped...
+    python parts_registry.py "%MODCONTENT%"
+    if errorlevel 1 exit /b 1
+)
+
+rem The transfer-case readout is a runtime-built key -- "<n>H"/"<n>L"/"-Lock" --
+rem looked up in the Vehicle string table. Vanilla stops at six driven wheels,
+rem so an 8x8 asks for a key nobody wrote and the readout comes up blank.
+if "%MTMI_DRIVEMODE_LABELS%"=="1" (
+    echo [%TIME%] [5c3] Adding transfer-case labels above six driven wheels...
+    python drivemode_labels.py "%MODCONTENT%"
+    if errorlevel 1 exit /b 1
+)
+
     echo [%TIME%] [5d] Pruning !MTMI_MOD_NAME! to the delta...
     python prune_delta.py "%MODCONTENT%"
     if errorlevel 1 exit /b 1

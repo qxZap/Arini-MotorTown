@@ -35,6 +35,27 @@ INJECTOR = REPO_ROOT_P / "MTBPInjector" / "bin" / "Release" / "net8.0" / "MTBPIn
 MOD_CONTENT = MOD_CONTENT_ROOT
 TABLE_DIR = "DataAsset/Vehicles"
 
+# The composite that NAMES which vehicle tables exist. A row in a table it
+# does not list is unreachable however unlocked the row is.
+COMPOSITE = "DataAsset/Vehicles/Vehicles.uasset"
+
+# Vanilla's composite lists eleven parents and omits Vehicles_Deprecated,
+# which is where Crany lives -- so Crany cannot be bought or spawned no matter
+# what we do to its bHidden flag. Capitalist Economy registers that table, and
+# that is the whole reason Crany "needs CapEcon": nothing to do with economy,
+# just a table nobody else declares.
+#
+# We were shipping it registered already, but only by accident: this machine
+# has CapEcon installed, so effective_asset handed us ITS composite to build
+# on. Rebuild anywhere without CapEcon and Crany quietly goes away again. So
+# register it outright.
+#
+# Vehicles_Test and Vehicles_WIP are deliberately NOT here. They exist too,
+# and Crany appears in Test as well, but they are the developers' scratch
+# tables and nothing says their rows are finished.
+REGISTER_TABLES = [x.strip() for x in os.environ.get(
+    "MTMI_VEH_REGISTER_TABLES", "Vehicles_Deprecated").split(",") if x.strip()]
+
 # Our own output is never an input — it would compound every build.
 OURS = "zzzz_MapChangeTest"
 
@@ -150,6 +171,21 @@ def main() -> int:
         # UAssetAPI writes the .uexp beside the .uasset; both must ship.
         total += 1
     print(f"  vehicle tables rewritten: {total}")
+
+    # Registration comes last: the composite has to exist in staging first,
+    # and it is written by the loop above like any other table.
+    staged = MOD_CONTENT / COMPOSITE
+    if REGISTER_TABLES and staged.is_file() and not args.dry_run:
+        add = ",".join(f"/Game/{TABLE_DIR}/{n}" for n in REGISTER_TABLES)
+        r = subprocess.run([str(INJECTOR), "register-parent-tables",
+                            "--uasset", str(staged), "--mappings", str(MAPPINGS),
+                            "--add", add],
+                           capture_output=True, text=True)
+        for line in (r.stdout + r.stderr).splitlines():
+            if line.strip():
+                print("    " + line.strip())
+        if r.returncode != 0:
+            return 1
     return 0
 
 

@@ -32,7 +32,7 @@ import tempfile
 from pathlib import Path
 
 from mt_paths import (GAME_PAKDIR, MAPPINGS, MOD_NAME, REPAK, REPO_ROOT, WORK_DIR,
-                      MAP_WORK_JSON)
+                      MAP_WORK_JSON, _cfg)
 
 MODNAME = MOD_NAME
 # Prefix follows the layer: the MTNet variants ship as zzzzzz_ so they sort
@@ -230,6 +230,27 @@ def main() -> int:
     # THAT table, not ours -- a row carries import indices into the asset it
     # came from. So the pak may ship two cargo tables, and each cargo is only
     # ever found in its own.
+    # A CONFLICT-ONLY compat ships a named list of files and nothing else
+    # (MTMI_DELTA_ONLY), so the economy checks below do not apply: it carries
+    # no cargo tables and no delivery-point classes because it has no argument
+    # with them. Those are still shipped by the base pak, which this layer
+    # mounts alongside rather than replacing.
+    #
+    # Stated out loud rather than skipped quietly -- a check that vanishes
+    # without saying so is how a layer starts shipping nothing and still
+    # passing.
+    _only = [x.strip() for x in (_cfg("MTMI_DELTA_ONLY", "") or "").split(",") if x.strip()]
+    if _only:
+        _ok(f"conflict-only compat: ships {len(_only)} declared table(s), "
+            f"economy checks not applicable")
+        for _rel in _only:
+            if _has(_rel + ".uasset"):
+                _ok(f"ships declared {_rel}")
+            else:
+                _fail(f"declared {_rel} but the pak does not ship it")
+        new_cargos = []
+        placed_dps = 0
+
     _tables: dict[str, list] = {}
     for c in new_cargos:
         _tables.setdefault(c.get("source_table", "DataAsset/Cargos_01.uasset"), []).append(c)

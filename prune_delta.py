@@ -31,12 +31,39 @@ import shutil
 import sys
 from pathlib import Path
 
+from mt_paths import _cfg
+
 KEEP_DIRS = ("DataAsset",)
 KEEP_GLOBS = ("Objects/Mission/Delivery/DeliveryPoint/Mod*",)
 
 
 def keepers(root: Path) -> set[Path]:
-    keep: set[Path] = set()
+    """What survives the prune.
+
+    MTMI_DELTA_ONLY replaces the defaults with an explicit list, for a compat
+    that exists to settle a NAMED conflict rather than to carry an economy.
+    The default keep-set is right for a cargo layer, whose whole job is the
+    tables and the delivery-point classes -- and far too wide for a layer
+    fixing three tables, which would otherwise ship all fifteen vehicle tables
+    plus every cargo table and override mods it has no argument with.
+
+    A compat pak wins every file it ships. Shipping a file it has no reason to
+    change is not neutral: it is a silent revert of whoever changed it last.
+
+    Paths are relative to the mod's Content dir and may name a file with or
+    without extension; sidecars (.uexp/.ubulk) come along automatically.
+    """
+    only = [x.strip() for x in (_cfg("MTMI_DELTA_ONLY", "") or "").split(",") if x.strip()]
+    if only:
+        keep: set[Path] = set()
+        for rel in only:
+            base = root / rel
+            for ext in ("", ".uasset", ".uexp", ".ubulk"):
+                cand = Path(str(base) + ext)
+                if cand.exists():
+                    keep.add(cand)
+        return keep
+    keep = set()
     for d in KEEP_DIRS:
         p = root / d
         if p.is_dir():
